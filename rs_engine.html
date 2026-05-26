@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAI · Relative Strength Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --black:#080808; --dark:#0d0d0d; --surface:#111111; --surface2:#141414; --surface3:#181818;
+  --border:#1e1e1e; --border2:#2a2a2a; --border3:#383838;
+  --white:#ffffff; --white2:#e8e4dc; --white3:#a8a49c; --white4:#5c5a55;
+  --green:#2d6a3f; --green2:#3a8a52; --green-light:#4aaa66; --green-glow:rgba(58,138,82,0.12);
+  --red:#a83a3a; --red-light:#e05c5c;
+  --gold:#b89a5a; --gold-light:#d4b878;
+  --amber:#c68f3c;
+  --mono:'JetBrains Mono', 'Courier New', monospace;
+}
+html { scroll-behavior:smooth; }
+body { background:var(--black); color:var(--white); font-family:'Montserrat', sans-serif; font-weight:300; overflow-x:hidden; }
+body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"); pointer-events:none; z-index:1000; opacity:0.5; }
+
+/* ── NAV ── */
+nav { position:fixed; top:0; left:0; right:0; padding:18px 40px; display:flex; justify-content:space-between; align-items:center; z-index:90; background:rgba(8,8,8,0.85); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom:1px solid var(--border); }
+.nav-brand { font-family:'Cormorant Garamond', serif; font-size:13px; letter-spacing:0.35em; text-transform:uppercase; color:var(--white2); }
+.nav-brand a { color:inherit; text-decoration:none; }
+.nav-tag { font-size:8px; letter-spacing:0.3em; color:var(--green-light); text-transform:uppercase; margin-left:14px; padding:3px 10px; border:1px solid rgba(74,170,102,0.3); }
+.nav-right { display:flex; gap:24px; align-items:center; }
+.nav-link { font-size:9.5px; letter-spacing:0.2em; text-transform:uppercase; color:var(--white3); text-decoration:none; transition:color 0.3s; font-weight:500; }
+.nav-link:hover { color:var(--green-light); }
+.nav-status { font-size:9px; letter-spacing:0.15em; color:var(--white3); font-family:var(--mono); display:flex; align-items:center; gap:8px; }
+.status-dot { width:6px; height:6px; border-radius:50%; background:var(--green-light); box-shadow:0 0 8px var(--green-light); animation:pulse 2s infinite; }
+.status-dot.idle { background:var(--white4); box-shadow:none; animation:none; }
+.status-dot.error { background:var(--red-light); box-shadow:0 0 8px var(--red-light); }
+@keyframes pulse { 0%,100% {opacity:1;} 50% {opacity:0.4;} }
+
+/* ── HEADER ── */
+.header { padding:90px 40px 30px; border-bottom:1px solid var(--border); background:var(--dark); }
+.header-inner { max-width:1700px; margin:0 auto; }
+.header-eyebrow { font-size:9px; letter-spacing:0.4em; text-transform:uppercase; color:var(--green-light); margin-bottom:16px; display:flex; align-items:center; gap:14px; }
+.header-eyebrow::after { content:''; display:block; width:40px; height:1px; background:var(--green2); }
+.header-title { font-family:'Cormorant Garamond', serif; font-size:42px; font-weight:300; color:var(--white); line-height:1.1; margin-bottom:10px; letter-spacing:-0.01em; }
+.header-title em { font-style:italic; color:var(--white2); }
+.header-sub { font-family:'EB Garamond', serif; font-size:15px; font-style:italic; color:var(--white3); max-width:760px; line-height:1.6; }
+
+/* ── CONTROL BAR ── */
+.control-bar { display:flex; gap:16px; padding:20px 40px; background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; position:sticky; top:58px; z-index:80; backdrop-filter:blur(14px); }
+.btn-primary { background:var(--green); border:1px solid var(--green2); color:var(--white); padding:10px 22px; font-size:10px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; cursor:pointer; transition:all 0.3s; font-family:'Montserrat', sans-serif; }
+.btn-primary:hover { background:var(--green2); }
+.btn-primary:disabled { background:var(--surface2); border-color:var(--border2); color:var(--white4); cursor:not-allowed; }
+.btn-secondary { background:transparent; border:1px solid var(--border3); color:var(--white3); padding:10px 18px; font-size:9.5px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; cursor:pointer; transition:all 0.3s; font-family:'Montserrat', sans-serif; }
+.btn-secondary:hover { color:var(--white); border-color:var(--white4); }
+.control-spacer { flex:1; }
+.control-info { font-size:9.5px; color:var(--white3); letter-spacing:0.1em; font-family:var(--mono); display:flex; gap:18px; flex-wrap:wrap; }
+.control-info span strong { color:var(--white2); font-weight:500; }
+
+/* ── PROGRESS ── */
+.progress-bar { position:fixed; top:58px; left:0; right:0; height:2px; background:var(--surface); z-index:85; display:none; }
+.progress-bar.active { display:block; }
+.progress-fill { height:100%; background:linear-gradient(90deg, var(--green2), var(--green-light)); width:0%; transition:width 0.3s; }
+
+/* ── TABS ── */
+.tabs { display:flex; padding:0 40px; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; }
+.tab { padding:18px 24px; font-size:9.5px; letter-spacing:0.2em; text-transform:uppercase; color:var(--white3); cursor:pointer; transition:all 0.3s; border-bottom:2px solid transparent; white-space:nowrap; font-weight:500; }
+.tab:hover { color:var(--white2); }
+.tab.active { color:var(--green-light); border-bottom-color:var(--green-light); }
+
+/* ── SECTIONS ── */
+.section { padding:40px; max-width:1700px; margin:0 auto; display:none; }
+.section.active { display:block; }
+.section-h { font-family:'Cormorant Garamond', serif; font-size:24px; font-weight:300; color:var(--white); margin-bottom:6px; }
+.section-h em { font-style:italic; color:var(--white2); }
+.section-sub { font-size:11px; color:var(--white3); letter-spacing:0.04em; line-height:1.7; margin-bottom:24px; max-width:780px; }
+
+/* ── MARKET PULSE PANEL ── */
+.pulse-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
+.pulse-panel { background:var(--dark); border:1px solid var(--border); padding:28px; position:relative; overflow:hidden; }
+.pulse-label { font-size:9px; letter-spacing:0.35em; text-transform:uppercase; color:var(--white3); margin-bottom:14px; }
+.regime-banner { display:flex; align-items:center; gap:14px; padding:18px 22px; border:1px solid; margin-bottom:18px; }
+.regime-banner.bullish { border-color:rgba(74,170,102,0.35); background:rgba(74,170,102,0.05); color:var(--green-light); }
+.regime-banner.bearish { border-color:rgba(224,92,92,0.35); background:rgba(224,92,92,0.05); color:var(--red-light); }
+.regime-banner.neutral { border-color:var(--border3); background:var(--surface); color:var(--white2); }
+.regime-banner.riskoff { border-color:rgba(198,143,60,0.4); background:rgba(198,143,60,0.06); color:var(--amber); }
+.regime-icon { font-size:18px; font-family:var(--mono); }
+.regime-text { font-size:12px; letter-spacing:0.15em; text-transform:uppercase; font-weight:500; }
+.regime-detail { font-size:10px; color:var(--white3); letter-spacing:0.05em; margin-left:auto; font-family:var(--mono); }
+.bench-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+.bench-card { background:var(--surface); border:1px solid var(--border); padding:18px 16px; }
+.bench-ticker { font-family:'Cormorant Garamond', serif; font-size:22px; color:var(--white); margin-bottom:4px; }
+.bench-price { font-family:var(--mono); font-size:13px; color:var(--white2); }
+.bench-change { font-family:var(--mono); font-size:11px; margin-top:4px; letter-spacing:0.04em; }
+.bench-change.up { color:var(--green-light); }
+.bench-change.down { color:var(--red-light); }
+.bench-range { font-size:9px; color:var(--white3); margin-top:8px; letter-spacing:0.08em; }
+
+/* ── TABLES ── */
+.table-wrap { background:var(--dark); border:1px solid var(--border); overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:11px; }
+thead { background:var(--surface); border-bottom:1px solid var(--border2); }
+th { padding:14px 16px; text-align:left; font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--white3); font-weight:500; cursor:pointer; user-select:none; white-space:nowrap; }
+th:hover { color:var(--white2); }
+th.sort-asc::after { content:' ▲'; color:var(--green-light); font-size:8px; }
+th.sort-desc::after { content:' ▼'; color:var(--green-light); font-size:8px; }
+td { padding:13px 16px; border-bottom:1px solid var(--border); font-family:var(--mono); color:var(--white2); white-space:nowrap; }
+tbody tr { transition:background 0.2s; }
+tbody tr:hover { background:var(--surface); }
+.ticker-cell { font-family:'Cormorant Garamond', serif; font-size:15px; color:var(--white); letter-spacing:0.04em; }
+.val-up { color:var(--green-light); }
+.val-down { color:var(--red-light); }
+.val-strong { color:var(--green-light); font-weight:500; }
+.val-weak { color:var(--white4); }
+.val-neutral { color:var(--white3); }
+.tier-1 { color:var(--green-light); font-weight:500; font-size:10px; letter-spacing:0.15em; }
+.tier-2 { color:var(--amber); font-weight:500; font-size:10px; letter-spacing:0.15em; }
+.tier-3 { color:var(--white4); font-size:10px; letter-spacing:0.15em; }
+.persist-badge { display:inline-block; padding:2px 8px; border:1px solid; font-size:8.5px; letter-spacing:0.15em; text-transform:uppercase; }
+.persist-yes { color:var(--green-light); border-color:rgba(74,170,102,0.3); }
+.persist-no { color:var(--white4); border-color:var(--border2); }
+.empty-state { padding:60px 30px; text-align:center; color:var(--white4); font-style:italic; font-family:'EB Garamond', serif; font-size:14px; }
+
+/* ── THEME HEATMAP ── */
+.theme-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:14px; margin-bottom:32px; }
+.theme-card { background:var(--dark); border:1px solid var(--border); padding:20px; position:relative; overflow:hidden; cursor:pointer; transition:all 0.3s; }
+.theme-card:hover { background:var(--surface); border-color:var(--border3); }
+.theme-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--green2); opacity:var(--strength, 0.3); }
+.theme-name { font-family:'Cormorant Garamond', serif; font-size:17px; color:var(--white); margin-bottom:4px; line-height:1.2; }
+.theme-count { font-size:9px; color:var(--white3); letter-spacing:0.1em; margin-bottom:14px; font-family:var(--mono); }
+.theme-metric-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:10px; }
+.theme-metric-row:last-of-type { border-bottom:none; }
+.theme-metric-label { color:var(--white3); letter-spacing:0.05em; }
+.theme-metric-val { color:var(--white2); }
+.theme-score-bar { margin-top:12px; height:4px; background:var(--surface); position:relative; overflow:hidden; }
+.theme-score-bar::after { content:''; position:absolute; left:0; top:0; bottom:0; background:var(--green-light); width:var(--score-pct, 0%); transition:width 0.6s; }
+
+/* ── SPRING LOAD CARDS ── */
+.springload-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+.sl-card { background:var(--dark); border:1px solid var(--border); padding:22px; position:relative; }
+.sl-card.armed { border-color:rgba(74,170,102,0.4); background:linear-gradient(135deg, rgba(74,170,102,0.04), transparent 60%); }
+.sl-card.triggered { border-color:var(--green-light); background:linear-gradient(135deg, rgba(74,170,102,0.1), transparent 70%); box-shadow:0 0 30px rgba(74,170,102,0.08); }
+.sl-ticker { font-family:'Cormorant Garamond', serif; font-size:22px; color:var(--white); margin-bottom:4px; }
+.sl-status { font-size:9px; letter-spacing:0.25em; text-transform:uppercase; padding:3px 10px; border:1px solid; display:inline-block; margin-bottom:14px; font-weight:500; }
+.sl-status.setup { color:var(--white3); border-color:var(--border3); }
+.sl-status.compression { color:var(--amber); border-color:rgba(198,143,60,0.4); }
+.sl-status.trigger { color:var(--green-light); border-color:var(--green-light); }
+.sl-phase { padding:8px 0; display:flex; align-items:center; gap:10px; font-size:10.5px; }
+.sl-phase-icon { width:14px; height:14px; border:1px solid var(--border3); border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--white4); }
+.sl-phase-icon.done { background:var(--green); border-color:var(--green2); color:var(--white); }
+.sl-phase-label { color:var(--white3); letter-spacing:0.05em; }
+.sl-phase-val { margin-left:auto; color:var(--white2); font-family:var(--mono); font-size:10px; }
+
+/* ── WATCHLIST EDITOR ── */
+.watchlist-editor { background:var(--dark); border:1px solid var(--border); padding:24px; margin-bottom:24px; }
+.wl-row { display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+.wl-input { flex:1; min-width:240px; background:var(--surface); border:1px solid var(--border2); padding:10px 14px; color:var(--white2); font-family:var(--mono); font-size:11px; letter-spacing:0.06em; outline:none; }
+.wl-input:focus { border-color:var(--green2); }
+.wl-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.wl-tag { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; background:var(--surface); border:1px solid var(--border2); font-family:var(--mono); font-size:10.5px; color:var(--white2); letter-spacing:0.04em; }
+.wl-tag.benchmark { color:var(--green-light); border-color:rgba(74,170,102,0.3); }
+.wl-tag-remove { color:var(--white4); cursor:pointer; transition:color 0.2s; font-size:11px; }
+.wl-tag-remove:hover { color:var(--red-light); }
+.theme-builder { margin-top:24px; padding-top:20px; border-top:1px solid var(--border); }
+.theme-builder-row { display:flex; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+.theme-builder-row input { background:var(--surface); border:1px solid var(--border2); padding:10px 14px; color:var(--white2); font-family:var(--mono); font-size:11px; letter-spacing:0.04em; outline:none; }
+.theme-builder-row .theme-name-input { width:200px; }
+.theme-builder-row .theme-tickers-input { flex:1; min-width:300px; }
+.theme-list { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+.theme-item { display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface); border:1px solid var(--border2); }
+.theme-item-name { font-family:'Cormorant Garamond', serif; font-size:14px; color:var(--white); min-width:180px; }
+.theme-item-tickers { font-family:var(--mono); font-size:10px; color:var(--white3); letter-spacing:0.04em; flex:1; }
+.theme-item-remove { cursor:pointer; color:var(--white4); font-size:14px; transition:color 0.2s; }
+.theme-item-remove:hover { color:var(--red-light); }
+
+/* ── HELP / DOCS ── */
+.help-block { background:var(--dark); border-left:2px solid var(--green2); padding:18px 22px; margin-bottom:18px; }
+.help-title { font-size:10px; letter-spacing:0.25em; text-transform:uppercase; color:var(--green-light); margin-bottom:8px; font-weight:500; }
+.help-body { font-family:'EB Garamond', serif; font-size:14px; color:var(--white2); line-height:1.7; }
+.help-body code { background:var(--surface2); padding:2px 6px; font-family:var(--mono); font-size:11px; color:var(--white); border:1px solid var(--border2); }
+.formula-block { font-family:var(--mono); font-size:11px; color:var(--white2); background:var(--surface2); padding:14px 18px; border:1px solid var(--border); margin:10px 0; white-space:pre-wrap; line-height:1.8; }
+
+/* ── FOOTER ── */
+footer { padding:40px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; margin-top:60px; flex-wrap:wrap; gap:20px; }
+.footer-note { font-size:9px; letter-spacing:0.15em; color:var(--white3); line-height:1.8; }
+.footer-links { display:flex; gap:24px; }
+.footer-links a { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--white3); text-decoration:none; transition:color 0.3s; }
+.footer-links a:hover { color:var(--green-light); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1000px) {
+  nav { padding:16px 20px; }
+  .header, .control-bar, .tabs, .section, footer { padding-left:20px; padding-right:20px; }
+  .nav-right { gap:14px; }
+  .nav-link { font-size:9px; }
+  .pulse-grid { grid-template-columns:1fr; }
+  .bench-grid { grid-template-columns:1fr; }
+  .header-title { font-size:30px; }
+  .progress-bar { top:56px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <a href="index.html">LAI</a>
+    <span class="nav-tag">RS Command Center</span>
+  </div>
+  <div class="nav-right">
+    <a href="index.html" class="nav-link">← Home</a>
+    <a href="INV_thesis.html" class="nav-link">$INV</a>
+    <div class="nav-status">
+      <span class="status-dot idle" id="data-status-dot"></span>
+      <span id="data-status-text">IDLE</span>
+    </div>
+  </div>
+</nav>
+
+<div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-eyebrow">Relative Strength Command Center</div>
+    <h1 class="header-title">Institutional Accumulation, <em>Detected</em></h1>
+    <p class="header-sub">A structured engine for identifying stocks and themes under sustained relative strength during market weakness, tracking leadership across timeframes, and isolating the spring-load moment before expansion.</p>
+  </div>
+</div>
+
+<!-- CONTROL BAR -->
+<div class="control-bar">
+  <button class="btn-primary" id="run-scan" onclick="runFullScan()">⟳ Run Scan</button>
+  <button class="btn-secondary" onclick="exportCSV()">Export CSV</button>
+  <button class="btn-secondary" onclick="document.getElementById('tab-settings').click()">Watchlist</button>
+  <div class="control-spacer"></div>
+  <div class="control-info">
+    <span>Provider <strong id="provider-name">FMP</strong></span>
+    <span>Universe <strong id="universe-count">0</strong></span>
+    <span>Last scan <strong id="last-scan">never</strong></span>
+    <span>Calls <strong id="call-count">0</strong></span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Market Pulse</div>
+  <div class="tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">RS Leaderboard</div>
+  <div class="tab" data-tab="leadership" onclick="switchTab('leadership')">Leadership Rankings</div>
+  <div class="tab" data-tab="themes" onclick="switchTab('themes')">Themes</div>
+  <div class="tab" data-tab="rotation" onclick="switchTab('rotation')">Rotation</div>
+  <div class="tab" data-tab="springload" onclick="switchTab('springload')">Spring-Load</div>
+  <div class="tab" data-tab="benchmarks" onclick="switchTab('benchmarks')">Benchmarks</div>
+  <div class="tab" id="tab-settings" data-tab="settings" onclick="switchTab('settings')">Watchlist & Config</div>
+  <div class="tab" data-tab="docs" onclick="switchTab('docs')">Methodology</div>
+</div>
+
+<!-- TAB: OVERVIEW -->
+<section class="section active" id="section-overview">
+  <h2 class="section-h">Market <em>Pulse</em></h2>
+  <p class="section-sub">Regime detection across QQQ, SPY and SMH with watchlist breadth. RS scanning activates only under qualifying market conditions to ensure strength readings reflect true accumulation rather than market drift.</p>
+
+  <div class="pulse-grid">
+    <div class="pulse-panel">
+      <div class="pulse-label">Market Regime</div>
+      <div id="regime-banner" class="regime-banner neutral">
+        <span class="regime-icon">◇</span>
+        <span class="regime-text">Awaiting Scan</span>
+        <span class="regime-detail" id="regime-detail">Run scan to detect regime</span>
+      </div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Watchlist breadth</span><span class="theme-metric-val" id="breadth-val">—</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">% Positive</span><span class="theme-metric-val" id="pct-positive">—</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">RS scanning</span><span class="theme-metric-val" id="rs-active">Inactive</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Median return</span><span class="theme-metric-val" id="median-ret">—</span></div>
+    </div>
+
+    <div class="pulse-panel">
+      <div class="pulse-label">Benchmarks</div>
+      <div class="bench-grid" id="bench-grid">
+        <div class="bench-card"><div class="bench-ticker">QQQ</div><div class="bench-price">—</div><div class="bench-change">—</div><div class="bench-range">—</div></div>
+        <div class="bench-card"><div class="bench-ticker">SPY</div><div class="bench-price">—</div><div class="bench-change">—</div><div class="bench-range">—</div></div>
+        <div class="bench-card"><div class="bench-ticker">SMH</div><div class="bench-price">—</div><div class="bench-change">—</div><div class="bench-range">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-h" style="margin-top:32px;">Top Leaders <em>at a Glance</em></h2>
+  <p class="section-sub">The five strongest names in the universe by RS Score with persistence flag. Full table is in the Leaderboard tab.</p>
+  <div class="table-wrap">
+    <table id="overview-top-table">
+      <thead><tr>
+        <th>Ticker</th><th>RS Score</th><th>Daily %</th><th>RS Spread</th><th>Vol Z</th><th>RSI</th><th>Persist</th>
+      </tr></thead>
+      <tbody><tr><td colspan="7" class="empty-state">Run a scan to populate</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: LEADERBOARD -->
+<section class="section" id="section-leaderboard">
+  <h2 class="section-h">Daily RS <em>Leaderboard</em></h2>
+  <p class="section-sub">Stocks ranked by composite RS Score. Sortable by every metric. The score blends excess return over QQQ, RS line slope, volume confirmation and short-term momentum.</p>
+  <div class="table-wrap">
+    <table id="leaderboard-table">
+      <thead><tr>
+        <th data-sort="rsScore">RS Score</th>
+        <th data-sort="ticker">Ticker</th>
+        <th data-sort="dailyPct">Daily %</th>
+        <th data-sort="rsSpread">RS Spread</th>
+        <th data-sort="volZ">Vol Z</th>
+        <th data-sort="roc5">5d ROC</th>
+        <th data-sort="rsSlope">RS Slope</th>
+        <th data-sort="rsi">RSI(14)</th>
+        <th data-sort="persistent">Persist</th>
+      </tr></thead>
+      <tbody><tr><td colspan="9" class="empty-state">Run a scan to populate</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: LEADERSHIP -->
+<section class="section" id="section-leadership">
+  <h2 class="section-h">Multi-Timeframe <em>Leadership Rankings</em></h2>
+  <p class="section-sub">A Leadership Score combining average RS across 20 days, consistency of outperformance, trend slope, acceleration and volume confirmation. Tier 1 names are persistent institutional leaders. Tier 2 are emerging.</p>
+  <div class="table-wrap">
+    <table id="leadership-table">
+      <thead><tr>
+        <th data-sort="tier">Tier</th>
+        <th data-sort="leaderScore">Leadership Score</th>
+        <th data-sort="ticker">Ticker</th>
+        <th data-sort="avgRS20">Avg RS Score (20d)</th>
+        <th data-sort="consistency20">Consistency 20d</th>
+        <th data-sort="rsTrend20">Trend Slope</th>
+        <th data-sort="rsAccel">Acceleration</th>
+        <th data-sort="volConfirm">Vol Confirm</th>
+        <th data-sort="consistency5">5d</th>
+        <th data-sort="consistency60">60d</th>
+      </tr></thead>
+      <tbody><tr><td colspan="10" class="empty-state">Run a scan to populate</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: THEMES -->
+<section class="section" id="section-themes">
+  <h2 class="section-h">Thematic <em>Intelligence</em></h2>
+  <p class="section-sub">Themes ranked by composite Theme Score. Low dispersion plus high median RS plus high participation indicates coordinated accumulation. High dispersion with mixed signal suggests rotation rather than thematic strength.</p>
+  <div class="theme-grid" id="theme-grid">
+    <div class="empty-state" style="grid-column:1/-1;">Define themes in the Watchlist tab, then run a scan.</div>
+  </div>
+  <h2 class="section-h" style="margin-top:36px;">Theme <em>Detail</em></h2>
+  <p class="section-sub">Full theme breakdown with all constituent metrics.</p>
+  <div class="table-wrap">
+    <table id="theme-table">
+      <thead><tr>
+        <th data-sort="themeScore">Theme Score</th>
+        <th data-sort="name">Theme</th>
+        <th data-sort="count">Members</th>
+        <th data-sort="medianRS">Median RS</th>
+        <th data-sort="avgReturn">Avg Return</th>
+        <th data-sort="participation">Participation</th>
+        <th data-sort="dispersion">Dispersion</th>
+        <th data-sort="avgRS5">Avg RS 5d</th>
+        <th data-sort="avgRS20">Avg RS 20d</th>
+      </tr></thead>
+      <tbody><tr><td colspan="9" class="empty-state">Define themes and run a scan</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: ROTATION -->
+<section class="section" id="section-rotation">
+  <h2 class="section-h">Rotation <em>Detector</em></h2>
+  <p class="section-sub">Day-over-day change in theme ranking, participation and trend. Themes with rapid rank improvements and rising participation are candidate emerging-leadership rotations.</p>
+  <div class="table-wrap">
+    <table id="rotation-table">
+      <thead><tr>
+        <th>Theme</th>
+        <th>Current Rank</th>
+        <th>Previous Rank</th>
+        <th>Δ Rank</th>
+        <th>Δ Participation</th>
+        <th>Δ Trend</th>
+        <th>Signal</th>
+      </tr></thead>
+      <tbody><tr><td colspan="7" class="empty-state">Run two scans on different days to observe rotation</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: SPRING-LOAD -->
+<section class="section" id="section-springload">
+  <h2 class="section-h">Spring-Load <em>Detection</em></h2>
+  <p class="section-sub">A three-phase model. Setup requires confirmed RS leadership. Compression requires ATR contraction (volatility in lowest 30th percentile of the last 60 days) and price held above its 10-day moving average. Trigger requires QQQ green, a 20-day high break or 5-day ROC acceleration, and volume expansion.</p>
+  <div class="springload-grid" id="springload-grid">
+    <div class="empty-state" style="grid-column:1/-1;">Run a scan to populate</div>
+  </div>
+</section>
+
+<!-- TAB: BENCHMARKS -->
+<section class="section" id="section-benchmarks">
+  <h2 class="section-h">Benchmark <em>Comparison</em></h2>
+  <p class="section-sub">QQQ, SPY and SMH compared across returns, volatility and short-term trend. Stock-vs-benchmark RS is computed against all three for each name in the leaderboard.</p>
+  <div class="table-wrap">
+    <table id="benchmarks-table">
+      <thead><tr>
+        <th>Benchmark</th><th>Price</th><th>Daily %</th><th>5d Return</th><th>20d Return</th><th>Volatility 20d</th><th>RSI</th>
+      </tr></thead>
+      <tbody><tr><td colspan="7" class="empty-state">Run a scan to populate</td></tr></tbody>
+    </table>
+  </div>
+  <h2 class="section-h" style="margin-top:36px;">Top vs <em>Benchmarks</em></h2>
+  <p class="section-sub">For each top-ranked stock, spread against each benchmark.</p>
+  <div class="table-wrap">
+    <table id="benchmarks-spreads-table">
+      <thead><tr>
+        <th>Ticker</th><th>Stock Return</th><th>vs QQQ</th><th>vs SPY</th><th>vs SMH</th>
+      </tr></thead>
+      <tbody><tr><td colspan="5" class="empty-state">Run a scan to populate</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TAB: SETTINGS / WATCHLIST -->
+<section class="section" id="section-settings">
+  <h2 class="section-h">Watchlist <em>Editor</em></h2>
+  <p class="section-sub">Universe of stocks the engine tracks. Benchmarks (QQQ, SPY, SMH) are always included automatically. Recommended 30-50 names for free-tier API limits.</p>
+
+  <div class="watchlist-editor">
+    <div class="wl-row">
+      <input type="text" class="wl-input" id="wl-input" placeholder="ADD TICKERS — COMMA SEPARATED — E.G. NVDA, AMD, AVGO" />
+      <button class="btn-primary" onclick="addTickers()">Add</button>
+      <button class="btn-secondary" onclick="loadPreset('ai')">Load AI Preset</button>
+      <button class="btn-secondary" onclick="loadPreset('semis')">Load Semis Preset</button>
+      <button class="btn-secondary" onclick="loadPreset('clear')">Clear</button>
+    </div>
+    <div class="wl-tags" id="wl-tags"></div>
+
+    <div class="theme-builder">
+      <h2 class="section-h" style="font-size:18px; margin-bottom:14px;">Theme <em>Builder</em></h2>
+      <div class="theme-builder-row">
+        <input type="text" class="theme-name-input" id="theme-name" placeholder="THEME NAME" />
+        <input type="text" class="theme-tickers-input" id="theme-tickers" placeholder="TICKERS — COMMA SEPARATED" />
+        <button class="btn-primary" onclick="addTheme()">Add Theme</button>
+      </div>
+      <div class="theme-list" id="theme-list"></div>
+    </div>
+
+    <div class="theme-builder">
+      <h2 class="section-h" style="font-size:18px; margin-bottom:14px;">Data <em>Provider</em></h2>
+      <div class="wl-row">
+        <select id="provider-select" class="wl-input" style="flex:0 1 280px;" onchange="changeProvider()">
+          <option value="yahoo">Yahoo Finance (no key, recommended for local file)</option>
+          <option value="fmp">Financial Modeling Prep (250/day, needs key)</option>
+          <option value="av">Alpha Vantage (25/day free, slow)</option>
+        </select>
+        <input type="text" class="wl-input" id="api-key" placeholder="API KEY (NOT NEEDED FOR YAHOO)" />
+        <button class="btn-secondary" onclick="saveProvider()">Save</button>
+      </div>
+      <p style="font-size:10.5px; color:var(--white3); margin-top:8px; letter-spacing:0.04em; line-height:1.7;">
+        <strong style="color:var(--white2);">Yahoo</strong> requires no key and works perfectly when running this file locally (file://). For hosted use it may hit CORS, then switch to FMP.<br>
+        <strong style="color:var(--white2);">FMP</strong> free tier gives 250 calls/day. Get a key at <span style="color:var(--green-light);">financialmodelingprep.com/developer/docs</span>. Paste below and click Save.<br>
+        Settings persist in browser localStorage.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- TAB: DOCS -->
+<section class="section" id="section-docs">
+  <h2 class="section-h">Methodology &amp; <em>Formulas</em></h2>
+  <p class="section-sub">Every metric the engine computes, exactly as it computes it.</p>
+
+  <div class="help-block">
+    <div class="help-title">Relative Strength Line (Normalized)</div>
+    <div class="help-body">RS line is the ratio of stock price to benchmark, normalized to the start of the lookback window so all stocks are directly comparable. A rising RS line means the stock is outperforming the benchmark regardless of absolute price.</div>
+    <div class="formula-block">RS(t) = (Stock(t) / Stock(0)) / (QQQ(t) / QQQ(0))</div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">RS Score (Composite)</div>
+    <div class="help-body">Weighted blend of excess return, RS line slope, volume confirmation and short momentum. Volume Z-score is capped at +4 to prevent earnings-day outliers from dominating the score.</div>
+    <div class="formula-block">RS_Score = 0.40 × (StockRet − QQQRet)
+         + 0.25 × RS_Slope (10-day linreg, normalized)
+         + 0.20 × min(VolumeZ, 4)
+         + 0.15 × ROC(5)</div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Persistence Filter (Refined)</div>
+    <div class="help-body">Original spec required red-day persistence. We extended it: a name qualifies as persistent if RS Score was above threshold on at least 2 of the last 3 red days OR remained above threshold for 5 of the last 10 days regardless of market color. This avoids signal starvation during steady uptrends.</div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Leadership Score</div>
+    <div class="help-body">Multi-timeframe composite. Weights shifted toward slope and acceleration vs the draft to catch emerging leaders earlier (matching O'Neil/Minervini-style institutional-leadership detection).</div>
+    <div class="formula-block">Leadership = 0.30 × Avg_RS_Score(20d)
+            + 0.25 × Consistency(20d)
+            + 0.20 × RS_Trend_Slope
+            + 0.15 × RS_Acceleration
+            + 0.10 × Volume_Confirmation
+
+Tier 1: top 20% — Institutional Leaders
+Tier 2: 20-50%   — Emerging
+Tier 3: 50-100%  — Weak / Noise</div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Theme Score</div>
+    <div class="help-body">Original spec mixed scales. We percentile-rank each component across all themes before combining so they are unit-comparable.</div>
+    <div class="formula-block">Theme_Score = 0.45 × pct_rank(Median_RS)
+              + 0.35 × pct_rank(Participation)
+              − 0.20 × pct_rank(Dispersion)</div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Spring-Load Phases (Refined)</div>
+    <div class="help-body">
+      <strong>Phase 1 — Setup</strong>: RS Score above threshold AND positive RS trend.<br>
+      <strong>Phase 2 — Compression</strong>: ATR(14) in lowest 30th percentile of last 60 days AND price &gt; 10-day MA.<br>
+      <strong>Phase 3 — Trigger</strong>: QQQ daily &gt; 0 AND (price &gt; 20-day high OR 5d ROC accelerating) AND volume &gt; 1.3× 20-day average.
+    </div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Live Data &amp; Refresh</div>
+    <div class="help-body">
+      The engine pulls fresh daily OHLCV every time you click <code>Run Scan</code>. There is no continuous polling — by design, since intraday RS noise is unhelpful for this signal. For end-of-day refresh, run once after US market close (~22:00 Lisbon time).<br><br>
+      <strong>Provider options:</strong><br>
+      • <strong>Yahoo Finance (default, no key)</strong>: works perfectly when running this file locally (file://). For hosted deployment, browser CORS may block it. Free, unlimited in practice.<br>
+      • <strong>FMP</strong>: free tier 250 calls/day after signup. Requires API key (get it at financialmodelingprep.com). Switch in the Watchlist & Config tab.<br>
+      • <strong>Alpha Vantage</strong>: works but free tier is 25 calls/day. A 50-ticker scan will hit the cap. Use AV only for small (~15 ticker) watchlists or with a premium key.<br><br>
+      Settings persist in browser localStorage. Re-enter your key on a new device.
+    </div>
+  </div>
+
+  <div class="help-block">
+    <div class="help-title">Architecture Notes</div>
+    <div class="help-body">The data provider is a swappable module. Calculations live in pure functions that take normalized arrays. To move to Python/Polygon later, only the data-fetch layer needs replacing — the scoring engine logic is portable as-is.</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div style="font-family:'Cormorant Garamond', serif; font-size:22px; letter-spacing:0.15em; color:var(--white2);">LAI</div>
+  <div class="footer-note" style="text-align:center;">
+    Liberty Avenue Investment · Relative Strength Command Center<br>
+    Independent research initiative · Not financial advice · For informational purposes only
+  </div>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="INV_thesis.html">$INV</a>
+  </div>
+</footer>
+
+<script>
+/* ═════════════════════════════════════════════════════════════════
+   RELATIVE STRENGTH COMMAND CENTER — ENGINE
+   Pure browser, swappable data provider, persistent settings.
+   ═════════════════════════════════════════════════════════════════ */
+
+const DEFAULTS = {
+  benchmarks: ['QQQ', 'SPY', 'SMH'],
+  presets: {
+    ai: ['NVDA','AMD','AVGO','MU','MRVL','ARM','TSM','ASML','LRCX','AMAT','KLAC','SMCI','VRT','DELL','ANET','CRDO','ALAB','INV','NBIS','APP','PLTR','HOOD','COIN','SOFI','TSLA','RKLB','LUNR','GEV','VST','NRG','TLN','OKLO','SMR','CEG','LEU'],
+    semis: ['NVDA','AMD','AVGO','MU','MRVL','ARM','TSM','ASML','LRCX','AMAT','KLAC','INTC','ON','QCOM','MCHP']
+  },
+  defaultThemes: [
+    { name: 'AI Compute', tickers: ['NVDA','AMD','AVGO','MRVL','SMCI','DELL','ANET','ALAB','CRDO'] },
+    { name: 'AI Power', tickers: ['VRT','VST','NRG','CEG','TLN','GEV','OKLO','SMR','LEU'] },
+    { name: 'AI Software', tickers: ['PLTR','APP','META','GOOGL','MSFT'] },
+    { name: 'Semi Equip', tickers: ['LRCX','AMAT','KLAC','ASML'] }
+  ],
+  thresholds: {
+    rsScoreLeader: 0.5,
+    volumeMin: 1.3,
+    persistDays: 2,
+    persistWindow: 3,
+    persistFallback: 5,
+    persistFallbackWindow: 10
+  }
+};
+
+const state = {
+  provider: 'yahoo',
+  apiKey: '',
+  watchlist: [],
+  themes: [],
+  bars: {},        // ticker -> array of {date, o,h,l,c,v}
+  metrics: {},     // ticker -> calculated metrics
+  benchData: {},   // bench ticker -> bars
+  benchMetrics: {},
+  marketRegime: null,
+  callCount: 0,
+  lastScan: null,
+  previousLeaderboard: null,
+  previousThemes: null
+};
+
+/* ─── LOCAL STORAGE ─── */
+function loadState() {
+  try {
+    const stored = localStorage.getItem('lai_rs_state');
+    if (stored) {
+      const s = JSON.parse(stored);
+      state.provider = s.provider || 'yahoo';
+      state.apiKey = s.apiKey || '';
+      // Migration: if user previously set FMP but never added a key, switch them to Yahoo to avoid 403 spam
+      if (state.provider === 'fmp' && !state.apiKey) state.provider = 'yahoo';
+      state.watchlist = s.watchlist || DEFAULTS.presets.ai.slice();
+      state.themes = s.themes || DEFAULTS.defaultThemes.slice();
+      state.previousLeaderboard = s.previousLeaderboard || null;
+      state.previousThemes = s.previousThemes || null;
+    } else {
+      state.watchlist = DEFAULTS.presets.ai.slice();
+      state.themes = DEFAULTS.defaultThemes.slice();
+    }
+  } catch (e) {
+    state.watchlist = DEFAULTS.presets.ai.slice();
+    state.themes = DEFAULTS.defaultThemes.slice();
+  }
+  renderWatchlist();
+  renderThemes();
+  document.getElementById('provider-select').value = state.provider;
+  document.getElementById('api-key').value = state.apiKey;
+  document.getElementById('universe-count').textContent = state.watchlist.length;
+  document.getElementById('provider-name').textContent = state.provider.toUpperCase();
+}
+function saveState() {
+  try {
+    localStorage.setItem('lai_rs_state', JSON.stringify({
+      provider: state.provider,
+      apiKey: state.apiKey,
+      watchlist: state.watchlist,
+      themes: state.themes,
+      previousLeaderboard: state.previousLeaderboard,
+      previousThemes: state.previousThemes
+    }));
+  } catch (e) {}
+}
+
+/* ─── TAB SWITCH ─── */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + name));
+}
+
+/* ─── PROVIDER MANAGEMENT ─── */
+function changeProvider() {
+  state.provider = document.getElementById('provider-select').value;
+  document.getElementById('provider-name').textContent = state.provider.toUpperCase();
+}
+function saveProvider() {
+  state.apiKey = document.getElementById('api-key').value.trim();
+  state.provider = document.getElementById('provider-select').value;
+  document.getElementById('provider-name').textContent = state.provider.toUpperCase();
+  saveState();
+  setStatus('SAVED', 'idle');
+  setTimeout(() => setStatus('IDLE', 'idle'), 1500);
+}
+
+/* ─── WATCHLIST ─── */
+function addTickers() {
+  const raw = document.getElementById('wl-input').value.toUpperCase();
+  const tickers = raw.split(/[,\s]+/).map(t => t.trim()).filter(t => t.length > 0 && t.length < 10);
+  tickers.forEach(t => { if (!state.watchlist.includes(t)) state.watchlist.push(t); });
+  document.getElementById('wl-input').value = '';
+  renderWatchlist();
+  saveState();
+}
+function removeTicker(t) {
+  state.watchlist = state.watchlist.filter(x => x !== t);
+  renderWatchlist();
+  saveState();
+}
+function loadPreset(name) {
+  if (name === 'clear') { state.watchlist = []; }
+  else { state.watchlist = DEFAULTS.presets[name].slice(); }
+  renderWatchlist();
+  saveState();
+}
+function renderWatchlist() {
+  const wrap = document.getElementById('wl-tags');
+  const all = [...DEFAULTS.benchmarks.map(b => ({t:b, bench:true})), ...state.watchlist.map(t => ({t, bench:false}))];
+  wrap.innerHTML = all.map(o => `
+    <span class="wl-tag ${o.bench ? 'benchmark' : ''}">${o.t}${o.bench ? ' · BENCH' : `<span class="wl-tag-remove" onclick="removeTicker('${o.t}')">×</span>`}</span>
+  `).join('');
+  document.getElementById('universe-count').textContent = state.watchlist.length;
+}
+
+/* ─── THEMES ─── */
+function addTheme() {
+  const name = document.getElementById('theme-name').value.trim();
+  const tickersRaw = document.getElementById('theme-tickers').value.toUpperCase();
+  const tickers = tickersRaw.split(/[,\s]+/).map(t => t.trim()).filter(t => t.length > 0);
+  if (!name || tickers.length === 0) return;
+  state.themes.push({ name, tickers });
+  document.getElementById('theme-name').value = '';
+  document.getElementById('theme-tickers').value = '';
+  renderThemes();
+  saveState();
+}
+function removeTheme(i) { state.themes.splice(i, 1); renderThemes(); saveState(); }
+function renderThemes() {
+  const wrap = document.getElementById('theme-list');
+  if (state.themes.length === 0) { wrap.innerHTML = '<div style="font-size:11px; color:var(--white4); font-style:italic;">No themes defined.</div>'; return; }
+  wrap.innerHTML = state.themes.map((th, i) => `
+    <div class="theme-item">
+      <div class="theme-item-name">${th.name}</div>
+      <div class="theme-item-tickers">${th.tickers.join(', ')}</div>
+      <span class="theme-item-remove" onclick="removeTheme(${i})">×</span>
+    </div>
+  `).join('');
+}
+
+/* ─── STATUS ─── */
+function setStatus(text, kind) {
+  document.getElementById('data-status-text').textContent = text;
+  const dot = document.getElementById('data-status-dot');
+  dot.className = 'status-dot ' + (kind || '');
+}
+function setProgress(pct) {
+  const bar = document.getElementById('progress-bar');
+  const fill = document.getElementById('progress-fill');
+  if (pct === null) { bar.classList.remove('active'); fill.style.width = '0%'; return; }
+  bar.classList.add('active');
+  fill.style.width = pct + '%';
+}
+
+/* ─── DATA PROVIDERS ─── */
+async function fetchHistory(ticker) {
+  state.callCount++;
+  document.getElementById('call-count').textContent = state.callCount;
+  if (state.provider === 'fmp') return fetchFMPHistory(ticker);
+  if (state.provider === 'av') return fetchAVHistory(ticker);
+  if (state.provider === 'yahoo') return fetchYahooHistory(ticker);
+  throw new Error('Unknown provider');
+}
+
+async function fetchFMPHistory(ticker) {
+  const key = state.apiKey;
+  if (!key) throw new Error('FMP requires API key. Add it in Watchlist & Config tab, or switch provider to Yahoo.');
+  // FMP migrated to /stable/ path in 2025. Old /api/v3/historical-price-full now returns 403 on free tier.
+  const url = `https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=${ticker}&apikey=${key}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (res.status === 401 || res.status === 403) throw new Error('FMP auth failed (check key)');
+  if (!res.ok) throw new Error('FMP HTTP ' + res.status);
+  const data = await res.json();
+  // Stable endpoint returns an array directly, not {historical:[...]}
+  const arr = Array.isArray(data) ? data : (data.historical || []);
+  if (arr.length === 0) throw new Error('FMP: no data for ' + ticker);
+  return arr.slice().reverse().map(d => ({
+    date: d.date, o: +d.open, h: +d.high, l: +d.low, c: +d.close, v: +d.volume
+  })).filter(d => d.c > 0).slice(-80);
+}
+
+async function fetchAVHistory(ticker) {
+  const key = state.apiKey || 'U738UYAT5BBAUW8B';
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=compact&apikey=${key}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error('AV HTTP ' + res.status);
+  const data = await res.json();
+  const series = data['Time Series (Daily)'];
+  if (!series) throw new Error('AV: no data for ' + ticker + ' (rate limit?)');
+  const rows = Object.entries(series).map(([date, v]) => ({
+    date, o: +v['1. open'], h: +v['2. high'], l: +v['3. low'], c: +v['4. close'], v: +v['5. volume']
+  })).sort((a,b) => a.date.localeCompare(b.date));
+  return rows.slice(-80);
+}
+
+async function fetchYahooHistory(ticker) {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 60 * 60 * 24 * 100;
+  const url = `https://query1.finance.yahoo.com/v7/finance/chart/${ticker}?period1=${start}&period2=${end}&interval=1d`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error('Yahoo HTTP ' + res.status + ' (CORS likely)');
+  const data = await res.json();
+  const r = data.chart?.result?.[0];
+  if (!r) throw new Error('Yahoo: no data for ' + ticker);
+  const ts = r.timestamp || [];
+  const q = r.indicators.quote[0];
+  return ts.map((t, i) => ({
+    date: new Date(t * 1000).toISOString().slice(0,10),
+    o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i]
+  })).filter(d => d.c != null && d.c > 0);
+}
+
+/* ─── INDICATORS ─── */
+const last = arr => arr[arr.length - 1];
+const pct = (a, b) => (b === 0 || b == null) ? 0 : (a - b) / b;
+
+function sma(arr, n) {
+  if (arr.length < n) return null;
+  let s = 0; for (let i = arr.length - n; i < arr.length; i++) s += arr[i];
+  return s / n;
+}
+function stdev(arr) {
+  if (arr.length < 2) return 0;
+  const m = arr.reduce((a,b) => a+b, 0) / arr.length;
+  const v = arr.reduce((a,b) => a + (b - m) * (b - m), 0) / arr.length;
+  return Math.sqrt(v);
+}
+function rsi(closes, period = 14) {
+  if (closes.length < period + 1) return null;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= period; i++) {
+    const ch = closes[i] - closes[i-1];
+    if (ch >= 0) gain += ch; else loss -= ch;
+  }
+  gain /= period; loss /= period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const ch = closes[i] - closes[i-1];
+    const g = Math.max(ch, 0), l = Math.max(-ch, 0);
+    gain = (gain * (period - 1) + g) / period;
+    loss = (loss * (period - 1) + l) / period;
+  }
+  if (loss === 0) return 100;
+  const rs = gain / loss;
+  return 100 - 100 / (1 + rs);
+}
+function atr(bars, period = 14) {
+  if (bars.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < bars.length; i++) {
+    const h = bars[i].h, l = bars[i].l, pc = bars[i-1].c;
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  // Wilder smoothed
+  let a = trs.slice(0, period).reduce((x,y) => x+y, 0) / period;
+  for (let i = period; i < trs.length; i++) a = (a * (period - 1) + trs[i]) / period;
+  return a;
+}
+function atrSeries(bars, period = 14) {
+  const out = [];
+  if (bars.length < period + 1) return out;
+  const trs = [];
+  for (let i = 1; i < bars.length; i++) {
+    const h = bars[i].h, l = bars[i].l, pc = bars[i-1].c;
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  let a = trs.slice(0, period).reduce((x,y) => x+y, 0) / period;
+  out.push(a);
+  for (let i = period; i < trs.length; i++) {
+    a = (a * (period - 1) + trs[i]) / period;
+    out.push(a);
+  }
+  return out;
+}
+function linregSlope(arr) {
+  const n = arr.length;
+  if (n < 2) return 0;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (let i = 0; i < n; i++) { sumX += i; sumY += arr[i]; sumXY += i * arr[i]; sumXX += i * i; }
+  const denom = n * sumXX - sumX * sumX;
+  if (denom === 0) return 0;
+  return (n * sumXY - sumX * sumY) / denom;
+}
+function pctRank(arr, val) {
+  if (arr.length === 0) return 0;
+  let below = 0;
+  for (const x of arr) if (x < val) below++;
+  return below / arr.length;
+}
+function dateAlign(a, b) {
+  // Find common date range; return aligned closes arrays
+  const setB = new Set(b.map(x => x.date));
+  const filteredA = a.filter(x => setB.has(x.date));
+  const setA = new Set(filteredA.map(x => x.date));
+  const filteredB = b.filter(x => setA.has(x.date));
+  return [filteredA, filteredB];
+}
+
+/* ─── PER-STOCK METRICS ─── */
+function calcStockMetrics(ticker, bars, qqqBars) {
+  if (!bars || bars.length < 25) return null;
+  if (!qqqBars || qqqBars.length < 25) return null;
+
+  const [sAligned, qAligned] = dateAlign(bars, qqqBars);
+  if (sAligned.length < 25) return null;
+
+  const closes = sAligned.map(b => b.c);
+  const vols = sAligned.map(b => b.v);
+  const qcloses = qAligned.map(b => b.c);
+
+  const n = closes.length;
+  const lastClose = closes[n-1];
+  const prevClose = closes[n-2];
+  const dailyRet = pct(lastClose, prevClose);
+
+  const qLast = qcloses[n-1], qPrev = qcloses[n-2];
+  const qDaily = pct(qLast, qPrev);
+
+  const rsSpread = dailyRet - qDaily;
+
+  // RS line, normalized to lookback start
+  const lookback = Math.min(60, n);
+  const baseS = closes[n - lookback];
+  const baseQ = qcloses[n - lookback];
+  const rsLine = [];
+  for (let i = n - lookback; i < n; i++) {
+    rsLine.push((closes[i] / baseS) / (qcloses[i] / baseQ));
+  }
+
+  // RS slope: 10-day linreg, normalized to make slopes comparable
+  const rs10 = rsLine.slice(-10);
+  const rsMean = rs10.reduce((a,b) => a+b, 0) / rs10.length;
+  const rsSlope = rsMean === 0 ? 0 : linregSlope(rs10) / rsMean;
+
+  // RS acceleration: today's RS vs mean of last 5
+  const rs5 = rsLine.slice(-5);
+  const rsMean5 = rs5.reduce((a,b) => a+b, 0) / rs5.length;
+  const rsAccel = last(rsLine) - rsMean5;
+
+  // Volume z-score
+  const vol20 = vols.slice(-21, -1); // last 20 excluding today
+  const vMean = vol20.reduce((a,b) => a+b, 0) / vol20.length;
+  const vStd = stdev(vol20);
+  const volZraw = vStd === 0 ? 0 : (vols[n-1] - vMean) / vStd;
+  const volZ = Math.min(volZraw, 4); // cap to prevent earnings outliers
+  const volRatio = vMean === 0 ? 1 : vols[n-1] / vMean;
+
+  // 5-day ROC
+  const roc5 = closes.length >= 6 ? pct(closes[n-1], closes[n-6]) : 0;
+  const roc20 = closes.length >= 21 ? pct(closes[n-1], closes[n-21]) : 0;
+
+  // RSI(14)
+  const rsiVal = rsi(closes.slice(-30), 14);
+
+  // RS Score (composite)
+  const rsScore = 0.40 * rsSpread
+                + 0.25 * rsSlope
+                + 0.20 * (volZ / 4)   // normalize cap
+                + 0.15 * roc5;
+
+  // History of daily rsSpread and rsScore for persistence and multi-timeframe
+  const rsSpreadSeries = [];
+  const rsScoreSeries = [];
+  const rsLineFull = [];
+  for (let i = 0; i < n; i++) {
+    if (i === 0) continue;
+    const b = closes[i - 1] !== 0 ? (closes[i] - closes[i-1]) / closes[i-1] : 0;
+    const bq = qcloses[i-1] !== 0 ? (qcloses[i] - qcloses[i-1]) / qcloses[i-1] : 0;
+    rsSpreadSeries.push(b - bq);
+  }
+  for (let i = 0; i < n; i++) {
+    if (i < 1) { rsLineFull.push(1); continue; }
+    rsLineFull.push((closes[i] / closes[0]) / (qcloses[i] / qcloses[0]));
+  }
+  // Daily score series approximated using daily spread + lagging RS slope, used for consistency
+  // For consistency we just need outperformance days
+  const outperfDays5 = rsSpreadSeries.slice(-5).filter(x => x > 0).length;
+  const outperfDays20 = rsSpreadSeries.slice(-20).filter(x => x > 0).length;
+  const outperfDays60 = rsSpreadSeries.slice(-60).filter(x => x > 0).length;
+  const consistency5 = outperfDays5 / Math.min(5, rsSpreadSeries.length);
+  const consistency20 = outperfDays20 / Math.min(20, rsSpreadSeries.length);
+  const consistency60 = outperfDays60 / Math.min(60, rsSpreadSeries.length);
+
+  // Avg RS Score 20d (approx using daily spread + slope component)
+  const last20Spreads = rsSpreadSeries.slice(-20);
+  const avgRS5 = rsSpreadSeries.slice(-5).reduce((a,b) => a+b, 0) / Math.min(5, rsSpreadSeries.length);
+  const avgRS20 = last20Spreads.reduce((a,b) => a+b, 0) / Math.min(20, rsSpreadSeries.length);
+  const avgRS60 = rsSpreadSeries.slice(-60).reduce((a,b) => a+b, 0) / Math.min(60, rsSpreadSeries.length);
+
+  // Volume confirmation: % of last 20 days where volume > 20d avg
+  let volConfirmDays = 0;
+  for (let i = Math.max(20, n - 20); i < n; i++) {
+    const win = vols.slice(Math.max(0, i - 20), i);
+    if (win.length === 0) continue;
+    const m = win.reduce((a,b) => a+b, 0) / win.length;
+    if (vols[i] > m) volConfirmDays++;
+  }
+  const volConfirm = volConfirmDays / 20;
+
+  // 20-day high, 10-day MA for spring-load
+  const high20 = Math.max(...sAligned.slice(-21, -1).map(b => b.h));
+  const ma10 = sma(closes.slice(-10), 10);
+  const atrVal = atr(sAligned.slice(-30), 14);
+  const atrAll = atrSeries(sAligned.slice(-75), 14);
+  const atrRank = atrAll.length > 0 ? pctRank(atrAll, atrVal) : 0.5;
+
+  // 5d ROC acceleration: today's 5d ROC vs 5d ROC five days ago
+  let rocAccel = false;
+  if (closes.length >= 11) {
+    const rocNow = pct(closes[n-1], closes[n-6]);
+    const rocPast = pct(closes[n-6], closes[n-11]);
+    rocAccel = rocNow > rocPast && rocNow > 0;
+  }
+
+  // Persistence check (using rsSpread > 0 as proxy for above-threshold on a given day, combined with rsScore today)
+  // Refined: 2 of last 3 days with positive spread > median absolute OR 5 of last 10
+  const thresh = 0; // outperformance against benchmark
+  let red3 = 0, qual3 = 0;
+  for (let i = Math.max(0, n - 4); i < n - 1; i++) {
+    const qDayRet = qcloses[i] !== 0 ? (qcloses[i+1] - qcloses[i]) / qcloses[i] : 0;
+    if (qDayRet < 0) {
+      red3++;
+      const sDayRet = closes[i] !== 0 ? (closes[i+1] - closes[i]) / closes[i] : 0;
+      if (sDayRet - qDayRet > 0) qual3++;
+    }
+  }
+  let qual10 = 0;
+  for (let i = Math.max(0, n - 11); i < n - 1; i++) {
+    const qDayRet = qcloses[i] !== 0 ? (qcloses[i+1] - qcloses[i]) / qcloses[i] : 0;
+    const sDayRet = closes[i] !== 0 ? (closes[i+1] - closes[i]) / closes[i] : 0;
+    if (sDayRet - qDayRet > 0) qual10++;
+  }
+  const persistent = (qual3 >= 2) || (qual10 >= 5);
+
+  return {
+    ticker, lastClose, dailyPct: dailyRet, rsSpread, rsScore, rsSlope, rsAccel, volZ, volRatio,
+    roc5, roc20, rsi: rsiVal, persistent,
+    consistency5, consistency20, consistency60,
+    avgRS5, avgRS20, avgRS60, volConfirm,
+    high20, ma10, atr: atrVal, atrRank, rocAccel,
+    aboveMA10: lastClose > (ma10 || lastClose),
+    rsLineLatest: last(rsLine),
+    avgVol: vMean
+  };
+}
+
+/* ─── LEADERSHIP SCORE ─── */
+function calcLeadershipScores(metrics) {
+  // Normalize each component to [0,1] via rank, then weighted sum
+  const tickers = Object.keys(metrics);
+  if (tickers.length === 0) return;
+  const avgRS = tickers.map(t => metrics[t].avgRS20);
+  const cons = tickers.map(t => metrics[t].consistency20);
+  const slope = tickers.map(t => metrics[t].rsSlope);
+  const accel = tickers.map(t => metrics[t].rsAccel);
+  const volc = tickers.map(t => metrics[t].volConfirm);
+
+  for (const t of tickers) {
+    const m = metrics[t];
+    const r1 = pctRank(avgRS, m.avgRS20);
+    const r2 = pctRank(cons, m.consistency20);
+    const r3 = pctRank(slope, m.rsSlope);
+    const r4 = pctRank(accel, m.rsAccel);
+    const r5 = pctRank(volc, m.volConfirm);
+    m.leaderScore = 0.30 * r1 + 0.25 * r2 + 0.20 * r3 + 0.15 * r4 + 0.10 * r5;
+  }
+  // Tiers: top 20% Tier1, 20-50% Tier2, else Tier3
+  const sorted = tickers.slice().sort((a,b) => metrics[b].leaderScore - metrics[a].leaderScore);
+  const n = sorted.length;
+  sorted.forEach((t, i) => {
+    const rank = i / n;
+    metrics[t].tier = rank < 0.2 ? 1 : rank < 0.5 ? 2 : 3;
+  });
+}
+
+/* ─── THEME SCORING ─── */
+function calcThemeScores(metrics, themes) {
+  const out = [];
+  for (const th of themes) {
+    const valid = th.tickers.filter(t => metrics[t]);
+    if (valid.length === 0) {
+      out.push({ name: th.name, count: 0, medianRS:0, avgReturn:0, participation:0, dispersion:0, avgRS5:0, avgRS20:0, themeScore:0, members:[] });
+      continue;
+    }
+    const spreads = valid.map(t => metrics[t].rsSpread);
+    const returns = valid.map(t => metrics[t].dailyPct);
+    const sorted = spreads.slice().sort((a,b) => a-b);
+    const medianRS = sorted.length % 2 === 0
+      ? (sorted[sorted.length/2 - 1] + sorted[sorted.length/2]) / 2
+      : sorted[Math.floor(sorted.length/2)];
+    const avgReturn = returns.reduce((a,b) => a+b, 0) / returns.length;
+    const participation = valid.filter(t => metrics[t].rsSpread > 0).length / valid.length;
+    const dispersion = stdev(spreads);
+    const avgRS5 = valid.map(t => metrics[t].avgRS5).reduce((a,b) => a+b, 0) / valid.length;
+    const avgRS20 = valid.map(t => metrics[t].avgRS20).reduce((a,b) => a+b, 0) / valid.length;
+
+    out.push({ name: th.name, count: valid.length, medianRS, avgReturn, participation, dispersion, avgRS5, avgRS20, members: valid });
+  }
+  // Percentile rank components, then composite
+  if (out.length === 0) return out;
+  const meds = out.map(t => t.medianRS);
+  const parts = out.map(t => t.participation);
+  const disps = out.map(t => t.dispersion);
+  for (const t of out) {
+    const rMed = pctRank(meds, t.medianRS);
+    const rPart = pctRank(parts, t.participation);
+    const rDisp = pctRank(disps, t.dispersion);
+    t.themeScore = 0.45 * rMed + 0.35 * rPart - 0.20 * rDisp;
+  }
+  out.sort((a,b) => b.themeScore - a.themeScore);
+  out.forEach((t, i) => t.rank = i + 1);
+  return out;
+}
+
+/* ─── MARKET REGIME ─── */
+function detectRegime(benchMetrics, watchlistMetrics) {
+  const qqq = benchMetrics['QQQ'];
+  const spy = benchMetrics['SPY'];
+  if (!qqq || !spy) return { kind: 'neutral', label: 'Insufficient data', detail: '—' };
+
+  const wlReturns = Object.values(watchlistMetrics).map(m => m.dailyPct);
+  const negCount = wlReturns.filter(r => r < 0).length;
+  const posPct = wlReturns.length > 0 ? (1 - negCount / wlReturns.length) * 100 : 0;
+  const breadth = wlReturns.length > 0 ? `${wlReturns.length - negCount}/${wlReturns.length} green` : '—';
+
+  // Risk-off (Sea of Red): QQQ < -1%, SPY < 0%, >=60% negative
+  const seaOfRed = qqq.dailyPct < -0.01 && spy.dailyPct < 0 && (negCount / Math.max(1, wlReturns.length)) >= 0.6;
+  if (seaOfRed) return { kind: 'riskoff', label: 'Sea of Red — RS Scanning Active', detail: `QQQ ${(qqq.dailyPct*100).toFixed(2)}% · ${breadth}`, rsActive: true };
+
+  const bullish = qqq.dailyPct > 0.005 && spy.dailyPct > 0 && (negCount / Math.max(1, wlReturns.length)) < 0.4;
+  if (bullish) return { kind: 'bullish', label: 'Risk-On — Bullish Tape', detail: `QQQ +${(qqq.dailyPct*100).toFixed(2)}% · ${breadth}`, rsActive: false };
+
+  const bearish = qqq.dailyPct < -0.005 && (negCount / Math.max(1, wlReturns.length)) > 0.5;
+  if (bearish) return { kind: 'bearish', label: 'Bearish — Mild Risk-Off', detail: `QQQ ${(qqq.dailyPct*100).toFixed(2)}% · ${breadth}`, rsActive: true };
+
+  return { kind: 'neutral', label: 'Mixed / Drift', detail: `QQQ ${(qqq.dailyPct*100).toFixed(2)}% · ${breadth}`, rsActive: false };
+}
+
+/* ─── BENCHMARK METRICS ─── */
+function calcBenchMetrics(bars) {
+  if (!bars || bars.length < 21) return null;
+  const closes = bars.map(b => b.c);
+  const n = closes.length;
+  const lastC = closes[n-1];
+  const dailyPct = pct(lastC, closes[n-2]);
+  const ret5 = closes.length >= 6 ? pct(lastC, closes[n-6]) : 0;
+  const ret20 = closes.length >= 21 ? pct(lastC, closes[n-21]) : 0;
+  const returns20 = [];
+  for (let i = Math.max(1, n - 20); i < n; i++) returns20.push(pct(closes[i], closes[i-1]));
+  const volatility = stdev(returns20) * Math.sqrt(252);
+  const rsiVal = rsi(closes.slice(-30), 14);
+  const high20 = Math.max(...bars.slice(-20).map(b => b.h));
+  const low20 = Math.min(...bars.slice(-20).map(b => b.l));
+  return { lastC, dailyPct, ret5, ret20, volatility, rsi: rsiVal, high20, low20 };
+}
+
+/* ─── MAIN SCAN ─── */
+async function runFullScan() {
+  const btn = document.getElementById('run-scan');
+
+  // Pre-flight: check provider has what it needs
+  if (state.provider === 'fmp' && !state.apiKey) {
+    alert('FMP requires an API key.\n\nEither:\n• Switch to Yahoo in Watchlist & Config (no key needed)\n• Or get a free key at financialmodelingprep.com and paste it in Watchlist & Config');
+    switchTab('settings');
+    return;
+  }
+  if (state.provider === 'av' && !state.apiKey) {
+    // OK, the engine has a baked-in AV key as fallback
+  }
+
+  btn.disabled = true;
+  setStatus('SCANNING', 'idle');
+  setProgress(0);
+  state.callCount = 0;
+  document.getElementById('call-count').textContent = '0';
+
+  const all = [...DEFAULTS.benchmarks, ...state.watchlist];
+  if (all.length === 0) { setStatus('NO TICKERS', 'error'); btn.disabled = false; setProgress(null); return; }
+
+  const failed = [];
+  let done = 0;
+  for (const t of all) {
+    try {
+      const bars = await fetchHistory(t);
+      if (DEFAULTS.benchmarks.includes(t)) state.benchData[t] = bars;
+      else state.bars[t] = bars;
+    } catch (e) {
+      failed.push(t + ' (' + e.message + ')');
+    }
+    done++;
+    setProgress(Math.round((done / all.length) * 90));
+    // Throttle for AV which has rate limits (25/day, 5/min on free)
+    if (state.provider === 'av' && done < all.length) {
+      await new Promise(r => setTimeout(r, 12500));
+    } else if (state.provider === 'yahoo') {
+      await new Promise(r => setTimeout(r, 120));
+    } else if (state.provider === 'fmp') {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  // Compute metrics
+  const qqq = state.benchData['QQQ'];
+  if (!qqq) {
+    setStatus('NO QQQ DATA', 'error');
+    btn.disabled = false;
+    setProgress(null);
+    alert('QQQ data fetch failed — needed as RS benchmark. Errors:\n' + failed.join('\n'));
+    return;
+  }
+
+  state.metrics = {};
+  for (const t of state.watchlist) {
+    if (!state.bars[t]) continue;
+    const m = calcStockMetrics(t, state.bars[t], qqq);
+    if (m) state.metrics[t] = m;
+  }
+
+  state.benchMetrics = {};
+  for (const b of DEFAULTS.benchmarks) {
+    if (state.benchData[b]) {
+      const m = calcBenchMetrics(state.benchData[b]);
+      if (m) {
+        m.ticker = b;
+        m.dailyPct = m.dailyPct;
+        state.benchMetrics[b] = m;
+      }
+    }
+  }
+
+  // Leadership scores
+  calcLeadershipScores(state.metrics);
+
+  // Themes
+  state.themeResults = calcThemeScores(state.metrics, state.themes);
+
+  // Regime
+  state.marketRegime = detectRegime(state.benchMetrics, state.metrics);
+
+  // Save previous leaderboard snapshot before overwriting (for rotation)
+  if (state.previousThemes && state.themeResults) {
+    // already saved last run
+  }
+
+  setProgress(100);
+  state.lastScan = new Date();
+  document.getElementById('last-scan').textContent = state.lastScan.toLocaleTimeString();
+
+  renderAll();
+
+  // Save snapshot
+  state.previousThemes = state.themeResults.map(t => ({ name: t.name, rank: t.rank, participation: t.participation, themeScore: t.themeScore }));
+  saveState();
+
+  setTimeout(() => setProgress(null), 500);
+  setStatus(failed.length > 0 ? `DONE (${failed.length} failed)` : 'DONE', failed.length > 0 ? 'error' : '');
+  if (failed.length > 0) console.warn('Failed:', failed);
+  btn.disabled = false;
+}
+
+/* ─── RENDERING ─── */
+function renderAll() {
+  renderRegime();
+  renderBenchmarks();
+  renderOverviewTop();
+  renderLeaderboard();
+  renderLeadership();
+  renderThemesGrid();
+  renderThemeTable();
+  renderRotation();
+  renderSpringLoad();
+  renderBenchmarkSpreads();
+}
+
+function renderRegime() {
+  if (!state.marketRegime) return;
+  const r = state.marketRegime;
+  const b = document.getElementById('regime-banner');
+  b.className = 'regime-banner ' + r.kind;
+  const icon = r.kind === 'bullish' ? '↑' : r.kind === 'bearish' ? '↓' : r.kind === 'riskoff' ? '⚠' : '◇';
+  b.innerHTML = `<span class="regime-icon">${icon}</span><span class="regime-text">${r.label}</span><span class="regime-detail">${r.detail}</span>`;
+
+  const negCount = Object.values(state.metrics).filter(m => m.dailyPct < 0).length;
+  const total = Object.values(state.metrics).length;
+  document.getElementById('breadth-val').textContent = `${total - negCount}/${total}`;
+  document.getElementById('pct-positive').textContent = total > 0 ? `${((1 - negCount/total) * 100).toFixed(0)}%` : '—';
+  document.getElementById('rs-active').textContent = r.rsActive ? 'Active' : 'Standby';
+  document.getElementById('rs-active').style.color = r.rsActive ? 'var(--green-light)' : 'var(--white3)';
+
+  const returns = Object.values(state.metrics).map(m => m.dailyPct).sort((a,b) => a-b);
+  const med = returns.length === 0 ? 0 : returns[Math.floor(returns.length/2)];
+  document.getElementById('median-ret').textContent = (med * 100).toFixed(2) + '%';
+}
+
+function renderBenchmarks() {
+  const grid = document.getElementById('bench-grid');
+  grid.innerHTML = DEFAULTS.benchmarks.map(b => {
+    const m = state.benchMetrics[b];
+    if (!m) return `<div class="bench-card"><div class="bench-ticker">${b}</div><div class="bench-price">—</div></div>`;
+    const cls = m.dailyPct >= 0 ? 'up' : 'down';
+    const sign = m.dailyPct >= 0 ? '+' : '';
+    return `<div class="bench-card">
+      <div class="bench-ticker">${b}</div>
+      <div class="bench-price">$${m.lastC.toFixed(2)}</div>
+      <div class="bench-change ${cls}">${sign}${(m.dailyPct*100).toFixed(2)}%</div>
+      <div class="bench-range">5d ${(m.ret5*100).toFixed(1)}% · 20d ${(m.ret20*100).toFixed(1)}%</div>
+    </div>`;
+  }).join('');
+
+  const tb = document.querySelector('#benchmarks-table tbody');
+  tb.innerHTML = DEFAULTS.benchmarks.map(b => {
+    const m = state.benchMetrics[b];
+    if (!m) return `<tr><td>${b}</td><td colspan="6" class="val-weak">no data</td></tr>`;
+    const cls = m.dailyPct >= 0 ? 'val-up' : 'val-down';
+    const sgn = m.dailyPct >= 0 ? '+' : '';
+    return `<tr>
+      <td class="ticker-cell">${b}</td>
+      <td>$${m.lastC.toFixed(2)}</td>
+      <td class="${cls}">${sgn}${(m.dailyPct*100).toFixed(2)}%</td>
+      <td class="${m.ret5 >= 0 ? 'val-up' : 'val-down'}">${(m.ret5*100).toFixed(2)}%</td>
+      <td class="${m.ret20 >= 0 ? 'val-up' : 'val-down'}">${(m.ret20*100).toFixed(2)}%</td>
+      <td>${(m.volatility*100).toFixed(1)}%</td>
+      <td>${m.rsi ? m.rsi.toFixed(1) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderOverviewTop() {
+  const top = Object.values(state.metrics).sort((a,b) => b.rsScore - a.rsScore).slice(0, 5);
+  const tb = document.querySelector('#overview-top-table tbody');
+  if (top.length === 0) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">No data</td></tr>'; return; }
+  tb.innerHTML = top.map(m => `
+    <tr>
+      <td class="ticker-cell">${m.ticker}</td>
+      <td class="${m.rsScore > 0 ? 'val-strong' : 'val-weak'}">${m.rsScore.toFixed(3)}</td>
+      <td class="${m.dailyPct >= 0 ? 'val-up' : 'val-down'}">${(m.dailyPct*100).toFixed(2)}%</td>
+      <td class="${m.rsSpread >= 0 ? 'val-up' : 'val-down'}">${(m.rsSpread*100).toFixed(2)}%</td>
+      <td class="${m.volZ > 1 ? 'val-strong' : 'val-neutral'}">${m.volZ.toFixed(2)}</td>
+      <td>${m.rsi ? m.rsi.toFixed(1) : '—'}</td>
+      <td><span class="persist-badge ${m.persistent ? 'persist-yes' : 'persist-no'}">${m.persistent ? 'YES' : 'NO'}</span></td>
+    </tr>
+  `).join('');
+}
+
+let leaderboardSort = { key: 'rsScore', dir: 'desc' };
+function renderLeaderboard() {
+  const rows = Object.values(state.metrics).slice();
+  rows.sort((a,b) => {
+    const av = a[leaderboardSort.key], bv = b[leaderboardSort.key];
+    if (typeof av === 'string') return leaderboardSort.dir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+    return leaderboardSort.dir === 'desc' ? bv - av : av - bv;
+  });
+  const tb = document.querySelector('#leaderboard-table tbody');
+  if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="9" class="empty-state">No data</td></tr>'; return; }
+  tb.innerHTML = rows.map(m => `
+    <tr>
+      <td class="${m.rsScore > 0 ? 'val-strong' : 'val-weak'}">${m.rsScore.toFixed(3)}</td>
+      <td class="ticker-cell">${m.ticker}</td>
+      <td class="${m.dailyPct >= 0 ? 'val-up' : 'val-down'}">${(m.dailyPct*100).toFixed(2)}%</td>
+      <td class="${m.rsSpread >= 0 ? 'val-up' : 'val-down'}">${(m.rsSpread*100).toFixed(2)}%</td>
+      <td class="${m.volZ > 1 ? 'val-strong' : 'val-neutral'}">${m.volZ.toFixed(2)}</td>
+      <td class="${m.roc5 >= 0 ? 'val-up' : 'val-down'}">${(m.roc5*100).toFixed(2)}%</td>
+      <td class="${m.rsSlope >= 0 ? 'val-up' : 'val-down'}">${m.rsSlope.toFixed(4)}</td>
+      <td>${m.rsi ? m.rsi.toFixed(1) : '—'}</td>
+      <td><span class="persist-badge ${m.persistent ? 'persist-yes' : 'persist-no'}">${m.persistent ? 'YES' : 'NO'}</span></td>
+    </tr>
+  `).join('');
+  document.querySelectorAll('#leaderboard-table th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sort === leaderboardSort.key) th.classList.add('sort-' + leaderboardSort.dir);
+  });
+}
+
+let leadershipSort = { key: 'leaderScore', dir: 'desc' };
+function renderLeadership() {
+  const rows = Object.values(state.metrics).slice();
+  rows.sort((a,b) => {
+    const av = a[leadershipSort.key], bv = b[leadershipSort.key];
+    if (typeof av === 'string') return leadershipSort.dir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+    return leadershipSort.dir === 'desc' ? bv - av : av - bv;
+  });
+  const tb = document.querySelector('#leadership-table tbody');
+  if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="10" class="empty-state">No data</td></tr>'; return; }
+  tb.innerHTML = rows.map(m => {
+    const tierLabel = m.tier === 1 ? '<span class="tier-1">● TIER 1</span>'
+                   : m.tier === 2 ? '<span class="tier-2">◐ TIER 2</span>'
+                   : '<span class="tier-3">○ TIER 3</span>';
+    return `<tr>
+      <td>${tierLabel}</td>
+      <td class="val-strong">${(m.leaderScore * 100).toFixed(1)}</td>
+      <td class="ticker-cell">${m.ticker}</td>
+      <td>${(m.avgRS20 * 100).toFixed(2)}%</td>
+      <td class="${m.consistency20 > 0.6 ? 'val-strong' : m.consistency20 > 0.4 ? 'val-neutral' : 'val-weak'}">${(m.consistency20 * 100).toFixed(0)}%</td>
+      <td class="${m.rsSlope >= 0 ? 'val-up' : 'val-down'}">${m.rsSlope.toFixed(4)}</td>
+      <td class="${m.rsAccel >= 0 ? 'val-up' : 'val-down'}">${m.rsAccel.toFixed(4)}</td>
+      <td>${(m.volConfirm * 100).toFixed(0)}%</td>
+      <td>${(m.consistency5 * 100).toFixed(0)}%</td>
+      <td>${(m.consistency60 * 100).toFixed(0)}%</td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('#leadership-table th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sort === leadershipSort.key) th.classList.add('sort-' + leadershipSort.dir);
+  });
+}
+
+function renderThemesGrid() {
+  const grid = document.getElementById('theme-grid');
+  if (!state.themeResults || state.themeResults.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No themes defined or no data.</div>';
+    return;
+  }
+  grid.innerHTML = state.themeResults.map(t => {
+    const strength = Math.max(0.1, Math.min(1, t.themeScore));
+    const pct = Math.round(strength * 100);
+    return `<div class="theme-card" style="--strength:${strength};">
+      <div class="theme-name">${t.name}</div>
+      <div class="theme-count">${t.count} members · rank #${t.rank}</div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Theme Score</span><span class="theme-metric-val val-strong">${(t.themeScore * 100).toFixed(1)}</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Median RS</span><span class="theme-metric-val ${t.medianRS >= 0 ? 'val-up' : 'val-down'}">${(t.medianRS*100).toFixed(2)}%</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Participation</span><span class="theme-metric-val">${(t.participation*100).toFixed(0)}%</span></div>
+      <div class="theme-metric-row"><span class="theme-metric-label">Dispersion</span><span class="theme-metric-val">${(t.dispersion*100).toFixed(2)}%</span></div>
+      <div class="theme-score-bar" style="--score-pct:${pct}%;"></div>
+    </div>`;
+  }).join('');
+}
+
+let themeSort = { key: 'themeScore', dir: 'desc' };
+function renderThemeTable() {
+  if (!state.themeResults || state.themeResults.length === 0) return;
+  const rows = state.themeResults.slice().sort((a,b) => {
+    const av = a[themeSort.key], bv = b[themeSort.key];
+    if (typeof av === 'string') return themeSort.dir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+    return themeSort.dir === 'desc' ? bv - av : av - bv;
+  });
+  const tb = document.querySelector('#theme-table tbody');
+  tb.innerHTML = rows.map(t => `
+    <tr>
+      <td class="val-strong">${(t.themeScore*100).toFixed(1)}</td>
+      <td class="ticker-cell">${t.name}</td>
+      <td>${t.count}</td>
+      <td class="${t.medianRS >= 0 ? 'val-up' : 'val-down'}">${(t.medianRS*100).toFixed(2)}%</td>
+      <td class="${t.avgReturn >= 0 ? 'val-up' : 'val-down'}">${(t.avgReturn*100).toFixed(2)}%</td>
+      <td>${(t.participation*100).toFixed(0)}%</td>
+      <td>${(t.dispersion*100).toFixed(2)}%</td>
+      <td>${(t.avgRS5*100).toFixed(2)}%</td>
+      <td>${(t.avgRS20*100).toFixed(2)}%</td>
+    </tr>
+  `).join('');
+}
+
+function renderRotation() {
+  if (!state.previousThemes || !state.themeResults) {
+    document.querySelector('#rotation-table tbody').innerHTML = '<tr><td colspan="7" class="empty-state">Run two scans on different days to observe rotation</td></tr>';
+    return;
+  }
+  const prevByName = {};
+  state.previousThemes.forEach(p => prevByName[p.name] = p);
+  const tb = document.querySelector('#rotation-table tbody');
+  tb.innerHTML = state.themeResults.map(t => {
+    const prev = prevByName[t.name];
+    if (!prev) return `<tr><td>${t.name}</td><td>#${t.rank}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>NEW</td></tr>`;
+    const dRank = prev.rank - t.rank;  // positive = moved up
+    const dPart = t.participation - prev.participation;
+    const dScore = t.themeScore - prev.themeScore;
+    const signal = dRank >= 3 && dPart > 0.1 ? '<span class="val-strong">EMERGING</span>'
+                : dRank <= -3 ? '<span class="val-down">FADING</span>'
+                : '<span class="val-neutral">STABLE</span>';
+    return `<tr>
+      <td class="ticker-cell">${t.name}</td>
+      <td>#${t.rank}</td>
+      <td>#${prev.rank}</td>
+      <td class="${dRank >= 0 ? 'val-up' : 'val-down'}">${dRank >= 0 ? '+' : ''}${dRank}</td>
+      <td class="${dPart >= 0 ? 'val-up' : 'val-down'}">${(dPart*100).toFixed(1)}%</td>
+      <td class="${dScore >= 0 ? 'val-up' : 'val-down'}">${(dScore*100).toFixed(1)}</td>
+      <td>${signal}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSpringLoad() {
+  const candidates = Object.values(state.metrics).filter(m => m.rsScore > 0.2 && m.rsSlope > 0);
+  const grid = document.getElementById('springload-grid');
+  if (candidates.length === 0) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No setups detected.</div>'; return; }
+  const qqq = state.benchMetrics['QQQ'];
+  const qqqGreen = qqq && qqq.dailyPct > 0;
+  candidates.sort((a,b) => b.rsScore - a.rsScore);
+
+  grid.innerHTML = candidates.slice(0, 24).map(m => {
+    const phase1 = m.rsScore > 0.2 && m.rsSlope > 0;
+    const phase2 = m.atrRank < 0.3 && m.aboveMA10;
+    const phase3 = qqqGreen && (m.lastClose > m.high20 || m.rocAccel) && m.volRatio > 1.3;
+
+    let status = 'setup', label = 'Setup';
+    if (phase3 && phase2 && phase1) { status = 'trigger'; label = 'Triggered'; }
+    else if (phase2 && phase1) { status = 'compression'; label = 'Compressing'; }
+
+    const cardClass = status === 'trigger' ? 'sl-card triggered' : status === 'compression' ? 'sl-card armed' : 'sl-card';
+
+    return `<div class="${cardClass}">
+      <div class="sl-ticker">${m.ticker}</div>
+      <div class="sl-status ${status}">${label}</div>
+      <div class="sl-phase">
+        <div class="sl-phase-icon ${phase1 ? 'done' : ''}">${phase1 ? '✓' : '1'}</div>
+        <span class="sl-phase-label">Setup · RS lead</span>
+        <span class="sl-phase-val">score ${m.rsScore.toFixed(2)}</span>
+      </div>
+      <div class="sl-phase">
+        <div class="sl-phase-icon ${phase2 ? 'done' : ''}">${phase2 ? '✓' : '2'}</div>
+        <span class="sl-phase-label">Compression · ATR ${(m.atrRank*100).toFixed(0)}%ile</span>
+        <span class="sl-phase-val">${m.aboveMA10 ? '&gt; MA10' : '&lt; MA10'}</span>
+      </div>
+      <div class="sl-phase">
+        <div class="sl-phase-icon ${phase3 ? 'done' : ''}">${phase3 ? '✓' : '3'}</div>
+        <span class="sl-phase-label">Trigger · vol/break</span>
+        <span class="sl-phase-val">vol ${m.volRatio.toFixed(2)}×</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderBenchmarkSpreads() {
+  const top = Object.values(state.metrics).sort((a,b) => b.rsScore - a.rsScore).slice(0, 15);
+  const tb = document.querySelector('#benchmarks-spreads-table tbody');
+  if (top.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="empty-state">No data</td></tr>'; return; }
+  const qqq = state.benchMetrics['QQQ']?.dailyPct || 0;
+  const spy = state.benchMetrics['SPY']?.dailyPct || 0;
+  const smh = state.benchMetrics['SMH']?.dailyPct || 0;
+  tb.innerHTML = top.map(m => {
+    const vq = m.dailyPct - qqq;
+    const vs = m.dailyPct - spy;
+    const vm = m.dailyPct - smh;
+    return `<tr>
+      <td class="ticker-cell">${m.ticker}</td>
+      <td class="${m.dailyPct >= 0 ? 'val-up' : 'val-down'}">${(m.dailyPct*100).toFixed(2)}%</td>
+      <td class="${vq >= 0 ? 'val-up' : 'val-down'}">${(vq*100).toFixed(2)}%</td>
+      <td class="${vs >= 0 ? 'val-up' : 'val-down'}">${(vs*100).toFixed(2)}%</td>
+      <td class="${vm >= 0 ? 'val-up' : 'val-down'}">${(vm*100).toFixed(2)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ─── SORT HANDLERS ─── */
+function attachSortHandlers() {
+  document.querySelectorAll('#leaderboard-table th').forEach(th => {
+    if (!th.dataset.sort) return;
+    th.onclick = () => {
+      if (leaderboardSort.key === th.dataset.sort) leaderboardSort.dir = leaderboardSort.dir === 'desc' ? 'asc' : 'desc';
+      else { leaderboardSort.key = th.dataset.sort; leaderboardSort.dir = 'desc'; }
+      renderLeaderboard();
+    };
+  });
+  document.querySelectorAll('#leadership-table th').forEach(th => {
+    if (!th.dataset.sort) return;
+    th.onclick = () => {
+      if (leadershipSort.key === th.dataset.sort) leadershipSort.dir = leadershipSort.dir === 'desc' ? 'asc' : 'desc';
+      else { leadershipSort.key = th.dataset.sort; leadershipSort.dir = 'desc'; }
+      renderLeadership();
+    };
+  });
+  document.querySelectorAll('#theme-table th').forEach(th => {
+    if (!th.dataset.sort) return;
+    th.onclick = () => {
+      if (themeSort.key === th.dataset.sort) themeSort.dir = themeSort.dir === 'desc' ? 'asc' : 'desc';
+      else { themeSort.key = th.dataset.sort; themeSort.dir = 'desc'; }
+      renderThemeTable();
+    };
+  });
+}
+
+/* ─── EXPORT CSV ─── */
+function exportCSV() {
+  if (Object.keys(state.metrics).length === 0) { alert('Run a scan first.'); return; }
+  const cols = ['ticker','rsScore','dailyPct','rsSpread','volZ','roc5','rsSlope','rsi','persistent','tier','leaderScore','avgRS20','consistency20','rsAccel','volConfirm','atrRank','rocAccel'];
+  const lines = [cols.join(',')];
+  Object.values(state.metrics).forEach(m => {
+    lines.push(cols.map(c => {
+      const v = m[c];
+      if (v == null) return '';
+      if (typeof v === 'boolean') return v ? '1' : '0';
+      if (typeof v === 'number') return v.toFixed(6);
+      return v;
+    }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lai_rs_scan_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ─── INIT ─── */
+loadState();
+attachSortHandlers();
+</script>
+</body>
+</html>
