@@ -167,13 +167,10 @@ def _search(award_type_codes):
 
 
 def fetch_awards():
-    """Prime contracts (A-D) + IDVs (separate request, merged). IDVs are best-effort."""
-    rows = _search(["A", "B", "C", "D"])
-    try:
-        rows += _search(["IDV_A", "IDV_B", "IDV_C", "IDV_D", "IDV_E"])
-    except Exception as exc:
-        print(f"[info] IDV fetch skipped: {exc}")
-    return rows
+    """Prime contracts only (A-D). IDVs are excluded — their values are lifetime
+    ceilings and their dates are old base periods, which is noise for a recent
+    capital-flows view."""
+    return _search(["A", "B", "C", "D"])
 
 
 # ── Webhook dispatcher (robust; never crashes the parse loop) ────────────────
@@ -305,8 +302,8 @@ def run():
             elif not WEBHOOK_URL:
                 alerted[award_id] = dt.datetime.utcnow().isoformat()
 
-    # mapped wins first, then by value (for the dashboard table)
-    results.sort(key=lambda r: (0 if r["ticker"] else 1, -r["award"]))
+    # newest first (most recent award date), then by value
+    results.sort(key=lambda r: (r["date"] or "", r["award"]), reverse=True)
 
     try:
         with open(OUTPUT_FILE, "w", encoding="utf-8") as fh:
