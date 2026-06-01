@@ -1,0 +1,43 @@
+name: USAspending Capital Flows
+
+# Runs the Trump's Watch engine on a schedule (and on a manual button press).
+# It fetches federal awards from USAspending.gov, fires Discord alerts for new
+# mapped wins, and pushes the data to the LAI worker so the dashboard tab is live.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"      # every 6 hours (UTC) — awards post slowly
+  workflow_dispatch: {}         # adds a "Run workflow" button for manual runs
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Persist the dedupe state between runs so you aren't re-alerted on the
+      # same award. A fresh key each run + restore-keys fallback = "load latest,
+      # save new" behaviour.
+      - name: Restore dedupe state
+        uses: actions/cache@v4
+        with:
+          path: capital_flows_state.json
+          key: cf-state-${{ github.run_id }}
+          restore-keys: |
+            cf-state-
+
+      - name: Run USAspending engine
+        env:
+          EXISTING_WEBHOOK_URL: ${{ secrets.EXISTING_WEBHOOK_URL }}
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_KEY: ${{ secrets.INGEST_KEY }}
+          # optional tuning:
+          # MIN_AWARD: "5000000"
+          # LOOKBACK_DAYS: "90"
+        run: python3 usaspending_engine.py
