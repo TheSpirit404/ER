@@ -295,10 +295,14 @@ def run():
         results.append(record)
 
         # The moment a fresh award clears the filter AND matches a ticker → alert.
+        # Only mark as alerted when the send SUCCEEDS (or alerts are disabled), so a
+        # transient 403/timeout is retried on the next run instead of lost.
         if ticker and award_id not in alerted:
             if dispatch_alert(record):
                 new_alerts += 1
-            alerted[award_id] = dt.datetime.utcnow().isoformat()
+                alerted[award_id] = dt.datetime.utcnow().isoformat()
+            elif not WEBHOOK_URL:
+                alerted[award_id] = dt.datetime.utcnow().isoformat()
 
     # mapped wins first, then by value (for the dashboard table)
     results.sort(key=lambda r: (0 if r["ticker"] else 1, -r["award"]))
