@@ -185,6 +185,7 @@ def dispatch_alert(award):
     text = (
         "🚨 LAI DESK · TRUMP'S WATCH ALERT 🚨\n"
         f"Ticker: ${award['ticker']}\n"
+        f"Date: {award.get('date') or 'n/a'}\n"
         f"Agency: {award['agency']}\n"
         f"Allocation: ${award['award'] / 1e6:.1f}M\n"
         f"Description: {award['description']}\n"
