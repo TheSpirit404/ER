@@ -204,6 +204,8 @@ def dispatch_alert(award):
             data, headers = json.dumps({"content": text[:1900]}).encode("utf-8"), {"Content-Type": "application/json"}
         else:
             data, headers = json.dumps({"text": text, "content": text}).encode("utf-8"), {"Content-Type": "application/json"}
+        # Discord/Cloudflare reject the default urllib UA with 403 — send a real one.
+        headers["User-Agent"] = "Mozilla/5.0 (compatible; LAIDesk/1.0)"
         req = request.Request(url, data=data, headers=headers, method="POST")
         with request.urlopen(req, timeout=15) as resp:
             return 200 <= resp.status < 300
@@ -224,7 +226,7 @@ def push_to_worker(results):
         sep = "&" if "?" in INGEST_URL else "?"
         url = f"{INGEST_URL}{sep}key={INGEST_KEY}"
         data = json.dumps({"awards": results}).encode("utf-8")
-        req = request.Request(url, data=data, headers={"Content-Type": "application/json", "x-ingest-key": INGEST_KEY}, method="POST")
+        req = request.Request(url, data=data, headers={"Content-Type": "application/json", "x-ingest-key": INGEST_KEY, "User-Agent": "Mozilla/5.0 (compatible; LAIDesk/1.0)"}, method="POST")
         with request.urlopen(req, timeout=15) as resp:
             ok = 200 <= resp.status < 300
             print(f"[ok] pushed {len(results)} awards to dashboard worker." if ok else f"[warn] ingest returned {resp.status}")
