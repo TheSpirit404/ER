@@ -134,19 +134,20 @@ def revenue_impact_score(award_value: float, annual_revenue: float):
 
 
 # ── USAspending fetch ────────────────────────────────────────────────────────
-def fetch_awards():
+def _search(award_type_codes):
+    """One USAspending spending_by_award POST for a single award-type group.
+    Contract codes and IDV codes must NOT be mixed in one request (→ HTTP 422)."""
     today = dt.date.today()
     start = today - dt.timedelta(days=LOOKBACK_DAYS)
     payload = {
         "filters": {
-            # contracts (A-D) + Indefinite Delivery Vehicles (IDV_*)
-            "award_type_codes": ["A", "B", "C", "D", "IDV_A", "IDV_B", "IDV_C", "IDV_D", "IDV_E"],
+            "award_type_codes": award_type_codes,
             "time_period": [{"start_date": start.isoformat(), "end_date": today.isoformat()}],
             "award_amounts": [{"lower_bound": MIN_AWARD}],
         },
         "fields": [
             "Award ID", "Recipient Name", "Award Amount", "Awarding Agency",
-            "Awarding Sub Agency", "Description", "Start Date", "Contract Award Type",
+            "Awarding Sub Agency", "Description", "Start Date", "Award Type",
         ],
         "page": 1,
         "limit": 100,
@@ -157,11 +158,22 @@ def fetch_awards():
     req = request.Request(
         USASPENDING_URL,
         data=body,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": "LAIDesk/1.0 (research)"},
         method="POST",
     )
     with request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode("utf-8")).get("results", [])
+
+
+def fetch_awards():
+    """Prime contracts (A-D) + IDVs (separate request, merged). IDVs are best-effort."""
+    rows = _search(["A", "B", "C", "D"])
+    try:
+        rows += _search(["IDV_A", "IDV_B", "IDV_C", "IDV_D", "IDV_E"])
+    except Exception as exc:
+        print(f"[info] IDV fetch skipped: {exc}")
+    return rows
 
 
 # ── Webhook dispatcher (robust; never crashes the parse loop) ────────────────
