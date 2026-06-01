@@ -142,7 +142,9 @@ def _search(award_type_codes):
     payload = {
         "filters": {
             "award_type_codes": award_type_codes,
-            "time_period": [{"start_date": start.isoformat(), "end_date": today.isoformat()}],
+            # date_type=action_date → only awards with a transaction in the window,
+            # not contracts whose base period merely overlaps it.
+            "time_period": [{"start_date": start.isoformat(), "end_date": today.isoformat(), "date_type": "action_date"}],
             "award_amounts": [{"lower_bound": MIN_AWARD}],
         },
         "fields": [
@@ -256,6 +258,9 @@ def run():
         print("[info] EXISTING_WEBHOOK_URL not set — alerts disabled (data will still be written).")
     state = load_state()
     alerted = state.get("alerted", {})
+    # Only alert on awards whose start date is genuinely recent — never on a
+    # stale base period (e.g. a 2022 contract that merely saw a recent mod).
+    alert_cutoff = (dt.date.today() - dt.timedelta(days=LOOKBACK_DAYS)).isoformat()
 
     try:
         rows = fetch_awards()
@@ -293,9 +298,12 @@ def run():
         results.append(record)
 
         # The moment a fresh award clears the filter AND matches a ticker → alert.
+        # Recency guard: skip awards with a stale/old start date (or no date) so a
+        # 2022 contract never pages you as if it were new.
         # Only mark as alerted when the send SUCCEEDS (or alerts are disabled), so a
         # transient 403/timeout is retried on the next run instead of lost.
-        if ticker and award_id not in alerted:
+        is_recent = bool(record["date"]) and record["date"] >= alert_cutoff
+        if ticker and is_recent and award_id not in alerted:
             if dispatch_alert(record):
                 new_alerts += 1
                 alerted[award_id] = dt.datetime.utcnow().isoformat()
