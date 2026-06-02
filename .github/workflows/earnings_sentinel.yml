@@ -48,6 +48,8 @@ jobs:
           # Same shared key your USAspending engine already uses.
           INGEST_KEY: ${{ secrets.INGEST_KEY }}
           FMP_KEY: ${{ secrets.FMP_KEY }}
+          # Finnhub consensus estimate (reliable) — optional but recommended for correct beat/miss.
+          FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
           POLL_SECONDS: "20"
         # AM window → 25 min (1500s); after-close → 35 min (2100s). Manual runs use 35.
         # `|| true` so the timeout's exit code doesn't fail the run (dedupe cache still saves).
