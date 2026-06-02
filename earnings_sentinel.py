@@ -51,6 +51,7 @@ WEBHOOK_URL = os.environ.get("EXISTING_WEBHOOK_URL", "").strip()
 INGEST_URL = os.environ.get("INGEST_URL", "").strip()
 INGEST_KEY = os.environ.get("INGEST_KEY", "").strip()
 FMP_KEY = os.environ.get("FMP_KEY", "").strip()
+FINNHUB_KEY = os.environ.get("FINNHUB_KEY", "").strip()
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "45"))
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "3"))
 STATE_FILE = os.environ.get("STATE_FILE", "earnings_sentinel_state.json")
@@ -174,10 +175,18 @@ def parse_pr(txt):
     # the actual EPS that precedes it). Mirrors the worker exactly.
     cands = []
 
+    def _is_guidance(idx, mlen):
+        pre = txt[max(0, idx - 95): idx]
+        post = txt[idx: idx + mlen + 20]
+        return bool(re.search(r"we expect|in the range of|range of \$|\bguidance\b|financial outlook|we (?:are )?(?:now )?(?:reaffirm|raising|lowering|increasing)", pre, re.I) or re.search(r"\bto\s*\$\s?\d", post))
+
+    def _is_prior(di):
+        return bool(re.search(r"prior[\s-]year|year[\s-]ago|same period|compared (?:with|to)|a year earlier", txt[max(0, di - 70): di], re.I))
+
     def scan_eps(pattern, basis):
         for mm in re.finditer(pattern, txt, re.I):
-            pre = txt[max(0, mm.start() - 60): mm.start()]
-            if re.search(r"prior[\s-]year|year[\s-]ago|same period|compared to|guidance|outlook|we expect|anticipat|forecast|project", pre, re.I):
+            di = mm.start() + mm.group(0).rfind("$")
+            if _is_guidance(mm.start(), len(mm.group(0))) or _is_prior(di):
                 continue
             try:
                 v = float(mm.group(1))
@@ -186,8 +195,10 @@ def parse_pr(txt):
             if 0 < v < 1000:
                 cands.append((v, basis))
 
-    scan_eps(r"non-?GAAP[^.$%]{0,70}?(?:net income|earnings|EPS|income)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,22}\$\s?(\d+\.\d{1,2})", "non-GAAP")
-    scan_eps(r"(?:GAAP\s+)?(?:diluted\s+)?(?:net income|earnings)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,22}\$\s?(\d+\.\d{1,2})", "GAAP")
+    scan_eps(r"non-?GAAP\s+net\s+(?:income|loss)\b[^.]{0,95}?\$\s?(\d+\.\d{2})\s+per\s+(?:diluted\s+)?(?:common\s+)?share", "non-GAAP")
+    scan_eps(r"non-?GAAP[^.$%]{0,55}?(?:net income|earnings|EPS)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,18}\$\s?(\d+\.\d{1,2})", "non-GAAP")
+    scan_eps(r"(?<!non-)GAAP\s+net\s+(?:income|loss)\b[^.]{0,95}?\$\s?(\d+\.\d{2})\s+per\s+(?:diluted\s+)?(?:common\s+)?share", "GAAP")
+    scan_eps(r"(?:net income|earnings)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,18}\$\s?(\d+\.\d{1,2})", "GAAP")
     if cands:
         pick = next((c for c in cands if c[1] == "non-GAAP"), None) or cands[0]
         out["eps"], out["eps_basis"] = pick[0], pick[1]
@@ -264,6 +275,25 @@ def fmp_actuals(sym):
     except Exception:
         pass
     return res
+
+
+def finnhub_eps_estimate(sym, ref_date):
+    # Finnhub carries the proper Street consensus (FMP's calendar epsEstimated is often
+    # wrong/wrong-period). Returns the consensus EPS estimate for the report period.
+    if not FINNHUB_KEY:
+        return None
+    try:
+        arr = json.loads(http_get("https://finnhub.io/api/v1/stock/earnings?symbol=%s&token=%s" % (sym, FINNHUB_KEY), {"User-Agent": BROWSER_UA}, timeout=15))
+        if isinstance(arr, list) and arr:
+            ref = dt.date.fromisoformat(ref_date) if ref_date else dt.date.today()
+            rows = [x for x in arr if x.get("period")]
+            if rows:
+                best = min(rows, key=lambda x: abs((dt.date.fromisoformat(x["period"]) - ref).days))
+                if best.get("estimate") is not None:
+                    return float(best["estimate"])
+    except Exception:
+        pass
+    return None
 
 
 def build_verdict(eps, eps_est, rev, rev_est, eps_basis=""):
@@ -398,6 +428,10 @@ def process_ticker(tk, cik, state):
     rev = pr.get("revenue")
     eps_basis = pr.get("eps_basis") or ""
     eps_est, rev_est = fmp.get("eps_est"), fmp.get("rev_est")
+    # Finnhub consensus is the authoritative estimate (FMP calendar est is unreliable)
+    fn_est = finnhub_eps_estimate(tk, fdate)
+    if fn_est is not None:
+        eps_est = fn_est
     guidance = pr.get("guidance") or ""
     highlights = list(pr.get("highlights") or [])
     gross_margin = pr.get("gross_margin")
