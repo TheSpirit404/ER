@@ -153,7 +153,7 @@ def fetch_pr_text(cik, accession):
 
 # ── parse the press release (mirrors the worker) ─────────────────────────────
 def parse_pr(txt):
-    out = {"revenue": None, "guidance": "", "gross_margin": None, "highlights": []}
+    out = {"revenue": None, "eps": None, "eps_basis": "", "guidance": "", "gross_margin": None, "highlights": []}
     if not txt:
         return out
     # revenue (reported, skip guidance sentences)
@@ -169,6 +169,28 @@ def parse_pr(txt):
         if v > 1e6:
             out["revenue"] = v
             break
+    # actual reported EPS — prefer NON-GAAP diluted; guard checks the text BEFORE the
+    # figure only (a trailing "compared to $X prior year" clause must not disqualify
+    # the actual EPS that precedes it). Mirrors the worker exactly.
+    cands = []
+
+    def scan_eps(pattern, basis):
+        for mm in re.finditer(pattern, txt, re.I):
+            pre = txt[max(0, mm.start() - 60): mm.start()]
+            if re.search(r"prior[\s-]year|year[\s-]ago|same period|compared to|guidance|outlook|we expect|anticipat|forecast|project", pre, re.I):
+                continue
+            try:
+                v = float(mm.group(1))
+            except ValueError:
+                continue
+            if 0 < v < 1000:
+                cands.append((v, basis))
+
+    scan_eps(r"non-?GAAP[^.$%]{0,70}?(?:net income|earnings|EPS|income)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,22}\$\s?(\d+\.\d{1,2})", "non-GAAP")
+    scan_eps(r"(?:GAAP\s+)?(?:diluted\s+)?(?:net income|earnings)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,22}\$\s?(\d+\.\d{1,2})", "GAAP")
+    if cands:
+        pick = next((c for c in cands if c[1] == "non-GAAP"), None) or cands[0]
+        out["eps"], out["eps_basis"] = pick[0], pick[1]
     # guidance
     move = re.search(r"\b(rais\w+|lower\w+|reaffirm\w+|reiterat\w+|increas\w+|cut)\b[^.]{0,60}\b(guidance|outlook|forecast)\b", txt, re.I)
     rng = re.search(r"\b(?:expects?|expected|sees|guidance|outlook|forecasts?|anticipates?|projects?)\b[^.]{0,130}?\$\s?[\d.,]+\s*(?:billion|million|[bm]\b)?(?:\s*(?:to|-|–|—|and)\s*\$?\s?[\d.,]+\s*(?:billion|million|[bm]\b)?)?", txt, re.I)
@@ -195,60 +217,74 @@ def parse_pr(txt):
         except ValueError:
             pass
 
+    boiler = re.compile(r"any particular amount|ordinary shares\b|shares of (?:its )?common stock\b|from time to time|may (?:not\s+)?be (?:suspended|fully|modified|terminated)|no (?:obligation|assurance)|not (?:be )?obligated|in its discretion|subject to (?:market|the)|forward[\s-]looking|risks and uncertaint|no guarantee|safe harbor|may be discontinued|to acquire and|and integrate|other companies|products,? or technolog|our ability|ability to (?:acquire|integrate)|successfully (?:acquire|integrate)", re.I)
+
     def grab(pattern, emoji):
         m = re.search(pattern, txt, re.I)
-        if m:
-            snip = txt[m.start(): m.start() + 130]
-            snip = re.sub(r"([.;])\s.*$", r"\1", re.sub(r"\s+", " ", snip).strip())
-            if len(snip) > 110:
-                snip = snip[:107] + "…"
-            out["highlights"].append("%s %s" % (emoji, snip))
+        if not m:
+            return
+        snip = txt[m.start(): m.start() + 130]
+        snip = re.sub(r"([.;])\s.*$", r"\1", re.sub(r"\s+", " ", snip).strip())
+        if boiler.search(snip):
+            return
+        if len(snip) > 110:
+            snip = snip[:107] + "…"
+        out["highlights"].append("%s %s" % (emoji, snip))
 
-    grab(r"(?:\$[\d.,]+\s*(?:billion|million)\s+(?:new\s+)?(?:share\s+)?(?:repurchase|buyback))|(?:(?:share\s+)?(?:repurchase|buyback)\s+(?:program|authoriz)[^.]{0,70})", "\U0001F4B0")
+    grab(r"\$[\d.,]+\s*(?:billion|million)\s+(?:new\s+)?(?:share\s+)?(?:repurchase|buyback)\s+(?:program|authoriz)[^.]{0,60}", "\U0001F4B0")
     grab(r"\b(?:awarded|new (?:multi-year )?contract|contract (?:win|award)|design win|order valued)\b[^.]{0,90}", "\U0001F4D1")
     grab(r"\b(?:partnership with|partnered with|strategic (?:alliance|collaboration|partnership)|collaboration with|teamed up with)\b[^.]{0,90}", "\U0001F91D")
-    grab(r"\b(?:to acquire|acquisition of|has acquired)\b[^.]{0,90}", "\U0001F3F7")
-    out["highlights"] = out["highlights"][:4]
+    grab(r"\b(?:agreed to acquire|completed the acquisition of|has acquired|to acquire)\s+[A-Z][A-Za-z0-9.&'\- ]{2,50}", "\U0001F3F7")
+    out["highlights"] = out["highlights"][:3]
     return out
 
 
 # ── FMP actuals (EPS / Rev vs estimate) ──────────────────────────────────────
 def fmp_actuals(sym):
+    # Returns the next earnings date + the CONSENSUS ESTIMATE for the current report
+    # period. It deliberately does NOT return a reported actual: when a report just
+    # dropped FMP still shows the prior quarter, so the actual comes from the press
+    # release instead. Estimates are stable and safe to use.
     res = {"eps": None, "eps_est": None, "rev": None, "rev_est": None, "exp_date": None}
     if not FMP_KEY:
         return res
     try:
         arr = json.loads(http_get("https://financialmodelingprep.com/api/v3/historical/earning_calendar/%s?apikey=%s" % (sym, FMP_KEY), {"User-Agent": BROWSER_UA}))
-        today = dt.date.today().isoformat()
-        past = sorted([x for x in arr if x.get("date") and x["date"] <= today and x.get("eps") is not None], key=lambda x: x["date"], reverse=True)
-        fut = sorted([x for x in arr if x.get("date") and x["date"] >= today], key=lambda x: x["date"])
+        rows = [x for x in arr if x.get("date")]
+        if not rows:
+            return res
+        today = dt.date.today()
+        fut = sorted([x for x in rows if x["date"] >= today.isoformat()], key=lambda x: x["date"])
         if fut:
             res["exp_date"] = fut[0]["date"]
-        if past:
-            x = past[0]
-            res["eps"], res["eps_est"] = x.get("eps"), x.get("epsEstimated")
-            res["rev"], res["rev_est"] = x.get("revenue"), x.get("revenueEstimated")
+        # estimate from the row CLOSEST to today (the just-/about-to-report period)
+        near = min(rows, key=lambda x: abs((dt.date.fromisoformat(x["date"]) - today).days))
+        res["eps_est"] = near.get("epsEstimated")
+        res["rev_est"] = near.get("revenueEstimated")
     except Exception:
         pass
     return res
 
 
-def build_verdict(eps, eps_est, rev, rev_est):
+def build_verdict(eps, eps_est, rev, rev_est, eps_basis=""):
     eps_pct = ((eps - eps_est) / abs(eps_est) * 100) if (eps is not None and eps_est) else None
     rev_pct = ((rev - rev_est) / abs(rev_est) * 100) if (rev is not None and rev_est) else None
+    basis_tag = (" (%s, from release)" % eps_basis) if (eps is not None and eps_basis) else ""
     bits = []
     if eps is not None:
-        bits.append("EPS $%.2f%s%s" % (eps, (" vs $%.2f est" % eps_est) if eps_est is not None else "", (" (%+.1f%%)" % eps_pct) if eps_pct is not None else ""))
+        bits.append("EPS $%.2f%s%s%s" % (eps, (" vs $%.2f est" % eps_est) if eps_est is not None else "", (" (%+.1f%%)" % eps_pct) if eps_pct is not None else "", basis_tag))
     if rev is not None:
         bits.append("Rev %s%s%s" % (fmt_rev(rev), (" vs %s est" % fmt_rev(rev_est)) if rev_est is not None else "", (" (%+.1f%%)" % rev_pct) if rev_pct is not None else ""))
     if not bits:
-        return "", eps_pct, rev_pct
+        return "\U0001F4CB Actuals pending — see the filing.", eps_pct, rev_pct
     if eps_pct is not None and rev_pct is not None:
         v = "\U0001F7E2 Strong (double beat)" if eps_pct >= 0 and rev_pct >= 0 else "\U0001F534 Weak (double miss)" if eps_pct < 0 and rev_pct < 0 else "\U0001F7E1 Mixed"
     elif eps_pct is not None:
         v = "✅ EPS beat" if eps_pct >= 0 else "❌ EPS miss"
+    elif rev_pct is not None:
+        v = "✅ Rev beat · EPS pending" if rev_pct >= 0 else "❌ Rev miss · EPS pending"
     else:
-        v = "➖"
+        v = "\U0001F4CB Reported"
     return "%s — %s" % (v, " · ".join(bits)), eps_pct, rev_pct
 
 
@@ -289,6 +325,25 @@ def worker_base():
     return INGEST_URL.split("/earnings-read-ingest")[0] if INGEST_URL else ""
 
 
+def claim_alert(tk, acc):
+    """Durable, SHARED dedup via the worker's KV. Returns True only the first time a
+    given (ticker, accession) is claimed — so even if this job's GitHub Actions cache
+    state file is lost between the after-close and pre-open runs, we won't re-alert the
+    same 8-K, and we won't collide with the worker's own alert path either.
+    On any error we fall back to True (local state still guards) — better a rare dup
+    than a missed earnings drop."""
+    base = worker_base()
+    if not base or not INGEST_KEY:
+        return True
+    try:
+        from urllib.parse import quote
+        url = "%s/earnings-claim?ticker=%s&acc=%s&key=%s" % (base, quote(tk), quote(acc), quote(INGEST_KEY))
+        r = json.loads(http_get(url, {"User-Agent": BROWSER_UA}, timeout=20))
+        return bool(r.get("first", True))
+    except Exception:
+        return True
+
+
 def fetch_worker_reading(sym):
     """Ask the worker for the full reading (it has FMP + the income-statement /
     analyst-estimate / press-release fallbacks). Used when no local FMP_KEY."""
@@ -326,33 +381,42 @@ def process_ticker(tk, cik, state):
     if not acc:
         return False
     if state["seen"].get(tk) == acc:
-        return False  # already handled this report
+        return False  # already handled this report (local fast-path)
+    # Durable cross-run / cross-system guard: if the worker (or a prior lost-state run)
+    # already claimed this exact 8-K, record it locally and stay quiet.
+    if not claim_alert(tk, acc):
+        state["seen"][tk] = acc
+        print("[skip] %s %s — already alerted (shared claim)" % (tk, acc))
+        return False
 
+    # HIGH-SPEED PATH: parse the press release locally and build the verdict right here
+    # — no slow round-trips on the critical path. The ACTUAL EPS/revenue come from the
+    # release (correct for THIS report); the consensus ESTIMATE comes from FMP (stable).
+    # We never use FMP's stale "actual" (it's the prior quarter until FMP catches up).
     pr = parse_pr(fetch_pr_text(cik, acc))
-    eps, eps_est = fmp.get("eps"), fmp.get("eps_est")
-    rev, rev_est = fmp.get("rev"), fmp.get("rev_est")
-    if rev is None and pr["revenue"] is not None:
-        rev = pr["revenue"]
-    guidance, highlights, gross_margin = pr["guidance"], list(pr["highlights"]), pr["gross_margin"]
+    eps = pr.get("eps")
+    rev = pr.get("revenue")
+    eps_basis = pr.get("eps_basis") or ""
+    eps_est, rev_est = fmp.get("eps_est"), fmp.get("rev_est")
+    guidance = pr.get("guidance") or ""
+    highlights = list(pr.get("highlights") or [])
+    gross_margin = pr.get("gross_margin")
     ir = ""
-    # No local EPS (no FMP_KEY here)? Ask the worker — it has FMP + all the fallbacks.
-    if eps is None:
-        wr = fetch_worker_reading(tk)
+    verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est, eps_basis)
+    # Fallback ONLY if the local parse found nothing — then ask the (corrected) worker.
+    if eps is None and rev is None:
+        wr = fetch_worker_reading(tk) or {}
         if wr:
-            eps = wr.get("eps") if eps is None else eps
-            eps_est = wr.get("epsEst") if eps_est is None else eps_est
-            rev = wr.get("rev") if rev is None else rev
-            rev_est = wr.get("revEst") if rev_est is None else rev_est
-            if not guidance and wr.get("guidance"):
-                guidance = wr["guidance"]
-            if not highlights and wr.get("highlights"):
-                highlights = wr["highlights"]
-            if gross_margin is None:
-                gross_margin = wr.get("grossMargin")
+            eps, eps_est = wr.get("eps"), wr.get("epsEst")
+            rev, rev_est = wr.get("rev"), wr.get("revEst")
+            guidance = guidance or wr.get("guidance") or ""
+            highlights = highlights or list(wr.get("highlights") or [])
+            gross_margin = gross_margin if gross_margin is not None else wr.get("grossMargin")
             ir = wr.get("irLink") or ir
+            if wr.get("verdict"):
+                verdict, eps_pct, rev_pct = wr["verdict"], wr.get("epsPct"), wr.get("revPct")
     if not ir:
         ir = "https://www.google.com/search?q=" + tk + "+investor+relations"
-    verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est)
 
     acc_no = acc.replace("-", "")
     sec_url = "https://www.sec.gov/Archives/edgar/data/%s/%s/" % (int(cik), acc_no)
