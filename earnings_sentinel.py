@@ -284,6 +284,23 @@ def push_ingest(reading):
         print("[warn] ingest failed:", exc)
 
 
+def worker_base():
+    # derive the worker root from INGEST_URL (…/earnings-read-ingest)
+    return INGEST_URL.split("/earnings-read-ingest")[0] if INGEST_URL else ""
+
+
+def fetch_worker_reading(sym):
+    """Ask the worker for the full reading (it has FMP + the income-statement /
+    analyst-estimate / press-release fallbacks). Used when no local FMP_KEY."""
+    base = worker_base()
+    if not base:
+        return None
+    try:
+        return json.loads(http_get("%s/earnings-read?ticker=%s" % (base, sym), {"User-Agent": BROWSER_UA}, timeout=25))
+    except Exception:
+        return None
+
+
 def load_state():
     try:
         with open(STATE_FILE) as f:
@@ -311,29 +328,45 @@ def process_ticker(tk, cik, state):
         return False  # already handled this report
 
     pr = parse_pr(fetch_pr_text(cik, acc))
-    rev = fmp.get("rev")
+    eps, eps_est = fmp.get("eps"), fmp.get("eps_est")
+    rev, rev_est = fmp.get("rev"), fmp.get("rev_est")
     if rev is None and pr["revenue"] is not None:
         rev = pr["revenue"]
-    verdict, eps_pct, rev_pct = build_verdict(fmp.get("eps"), fmp.get("eps_est"), rev, fmp.get("rev_est"))
+    guidance, highlights, gross_margin = pr["guidance"], list(pr["highlights"]), pr["gross_margin"]
+    # No local EPS (no FMP_KEY here)? Ask the worker — it has FMP + all the fallbacks.
+    if eps is None:
+        wr = fetch_worker_reading(tk)
+        if wr:
+            eps = wr.get("eps") if eps is None else eps
+            eps_est = wr.get("epsEst") if eps_est is None else eps_est
+            rev = wr.get("rev") if rev is None else rev
+            rev_est = wr.get("revEst") if rev_est is None else rev_est
+            if not guidance and wr.get("guidance"):
+                guidance = wr["guidance"]
+            if not highlights and wr.get("highlights"):
+                highlights = wr["highlights"]
+            if gross_margin is None:
+                gross_margin = wr.get("grossMargin")
+    verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est)
 
     acc_no = acc.replace("-", "")
     sec_url = "https://www.sec.gov/Archives/edgar/data/%s/%s/" % (int(cik), acc_no)
     lines = ["\U0001F4CA **%s** reported earnings (8-K)" % tk]
     if verdict:
         lines.append(verdict)
-    if pr["guidance"]:
-        lines.append(pr["guidance"])
-    lines += pr["highlights"]
+    if guidance:
+        lines.append(guidance)
+    lines += highlights
     lines.append("[SEC filing](<%s>)" % sec_url)
     send_webhook("\n".join(lines))
 
     push_ingest({
         "ticker": tk, "date": fdate or "", "verdict": verdict,
-        "eps": fmp.get("eps"), "epsEst": fmp.get("eps_est"),
+        "eps": eps, "epsEst": eps_est,
         "epsPct": round(eps_pct, 1) if eps_pct is not None else None,
-        "rev": rev, "revEst": fmp.get("rev_est"),
+        "rev": rev, "revEst": rev_est,
         "revPct": round(rev_pct, 1) if rev_pct is not None else None,
-        "grossMargin": pr["gross_margin"], "guidance": pr["guidance"], "highlights": pr["highlights"],
+        "grossMargin": gross_margin, "guidance": guidance, "highlights": highlights,
     })
 
     state["seen"][tk] = acc
@@ -366,6 +399,10 @@ def run_once():
 def main():
     once = "--once" in sys.argv
     print("[start] Earnings Sentinel · %d tickers · poll %ss · once=%s" % (len(WATCH), POLL_SECONDS, once))
+    print("[config] FMP_KEY=%s · webhook=%s · ingest=%s · worker-fallback=%s" % (
+        "set" if FMP_KEY else "MISSING (will use worker fallback)",
+        "set" if WEBHOOK_URL else "MISSING", "set" if (INGEST_URL and INGEST_KEY) else "MISSING",
+        "available" if worker_base() else "no (set INGEST_URL)"))
     if once:
         run_once(); return
     while True:
