@@ -296,7 +296,8 @@ def fetch_worker_reading(sym):
     if not base:
         return None
     try:
-        return json.loads(http_get("%s/earnings-read?ticker=%s" % (base, sym), {"User-Agent": BROWSER_UA}, timeout=25))
+        # fresh=1 forces the worker to recompute from FMP (don't serve a stale/empty cache)
+        return json.loads(http_get("%s/earnings-read?ticker=%s&fresh=1" % (base, sym), {"User-Agent": BROWSER_UA}, timeout=30))
     except Exception:
         return None
 
@@ -333,6 +334,7 @@ def process_ticker(tk, cik, state):
     if rev is None and pr["revenue"] is not None:
         rev = pr["revenue"]
     guidance, highlights, gross_margin = pr["guidance"], list(pr["highlights"]), pr["gross_margin"]
+    ir = ""
     # No local EPS (no FMP_KEY here)? Ask the worker — it has FMP + all the fallbacks.
     if eps is None:
         wr = fetch_worker_reading(tk)
@@ -347,6 +349,9 @@ def process_ticker(tk, cik, state):
                 highlights = wr["highlights"]
             if gross_margin is None:
                 gross_margin = wr.get("grossMargin")
+            ir = wr.get("irLink") or ir
+    if not ir:
+        ir = "https://www.google.com/search?q=" + tk + "+investor+relations"
     verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est)
 
     acc_no = acc.replace("-", "")
@@ -358,6 +363,8 @@ def process_ticker(tk, cik, state):
         lines.append(guidance)
     lines += highlights
     lines.append("[SEC filing](<%s>)" % sec_url)
+    if ir:
+        lines.append("[Investor Relations](<%s>)" % ir)
     send_webhook("\n".join(lines))
 
     push_ingest({
