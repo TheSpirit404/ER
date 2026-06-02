@@ -40,8 +40,12 @@ jobs:
       - name: Run the sentinel for the earnings window (poll every 45s)
         env:
           STOCK_WATCH_TICKERS: ${{ secrets.STOCK_WATCH_TICKERS }}
-          EXISTING_WEBHOOK_URL: ${{ secrets.EXISTING_WEBHOOK_URL }}
-          INGEST_URL: ${{ secrets.INGEST_URL }}
+          # Dedicated #earnings channel webhook (a NEW secret — separate from the digest one).
+          EXISTING_WEBHOOK_URL: ${{ secrets.EARNINGS_WEBHOOK_URL }}
+          # Ingest URL is NOT secret — hardcoded here so it never clashes with the
+          # USAspending workflow's INGEST_URL. Only the path differs.
+          INGEST_URL: "https://lai-yahoo-proxy.tomykuo888.workers.dev/earnings-read-ingest"
+          # Same shared key your USAspending engine already uses.
           INGEST_KEY: ${{ secrets.INGEST_KEY }}
           FMP_KEY: ${{ secrets.FMP_KEY }}
           POLL_SECONDS: "45"
