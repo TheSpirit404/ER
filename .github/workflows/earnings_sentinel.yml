@@ -4,23 +4,27 @@ name: Earnings Sentinel
 # (polling SEC every ~45s) — this is how you get sub-minute detection on free
 # GitHub Actions despite its 5-minute cron floor: we trigger once, then loop.
 #
-# Two tight earnings windows (GitHub cron is always UTC):
-#   • AM / pre-open      10:45 → 11:10 UTC  (25 min)
-#   • After-close        19:55 → 20:30 UTC  (35 min)
-# ~60 min/weekday total ≈ 1,290 min/month — fits the free PRIVATE allowance (2,000/mo).
-# Note: GitHub cron can start a few minutes late under load, so if a report ever
-# lands right at the edge, the dashboard's own 15-min worker cron is the backstop.
+# PUBLIC-REPO config → UNLIMITED GitHub Actions minutes, so we run WIDE windows that
+# fully cover the report ranges (and absorb GitHub's scheduled-run delays).
+# GitHub cron is ALWAYS UTC; times below show UK (BST = UTC+1) and US-Eastern (EDT = UTC-4):
+#   • AM / pre-open   10:00 → 12:30 UTC  =  11:00am–1:30pm UK  =  6:00–8:30am ET  (150 min)
+#                     → covers the whole US pre-open earnings range (MDT, banks, industrials).
+#   • After-close     19:30 → 22:00 UTC  =   8:30–11:00pm UK   =  3:30–6:00pm ET  (150 min)
+#                     → from before the 9pm-UK close through the lagging 8-Ks (AVGO, CRWD, etc.).
+# Safe to be public: NO secrets in this file or the script — keys live in GitHub Secrets.
+# Note: GitHub auto-pauses scheduled workflows after 60 days with no repo activity; a commit
+# (or the Run-workflow button) re-arms it. Backstop: the worker's 15-min cron covers gaps.
 
 on:
   schedule:
-    - cron: "45 10 * * 1-5"     # 10:45 UTC ≈ 11:45 BST — AM / pre-open reports
-    - cron: "55 19 * * 1-5"     # 19:55 UTC ≈ 20:55 BST — after-close reports
+    - cron: "0 10 * * 1-5"      # 10:00 UTC = 11:00am UK (BST) — AM / pre-open (runs 150 min)
+    - cron: "30 19 * * 1-5"     # 19:30 UTC =  8:30pm UK (BST) — after-close (runs 150 min, to 11:00pm UK)
   workflow_dispatch: {}          # "Run workflow" button for manual testing
 
 jobs:
   sentinel:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 160     # must exceed the longest window (AM = 150 min) + setup overhead
     steps:
       - uses: actions/checkout@v4
 
@@ -51,10 +55,10 @@ jobs:
           # Finnhub consensus estimate (reliable) — optional but recommended for correct beat/miss.
           FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
           POLL_SECONDS: "20"
-        # AM window → 25 min (1500s); after-close → 35 min (2100s). Manual runs use 35.
-        # `|| true` so the timeout's exit code doesn't fail the run (dedupe cache still saves).
+        # AM window → 150 min (9000s, 10:00→12:30 UTC); after-close → 150 min (9000s, 19:30→22:00 UTC).
+        # Manual runs use 150 min. `|| true` so the timeout's exit code doesn't fail the run.
         run: |
           SCHED="${{ github.event.schedule }}"
-          if [ "$SCHED" = "45 10 * * 1-5" ]; then DUR=1500; else DUR=2100; fi
+          if [ "$SCHED" = "0 10 * * 1-5" ]; then DUR=9000; else DUR=9000; fi
           echo "Schedule: '${SCHED:-manual}' → running ${DUR}s"
           timeout $DUR python3 earnings_sentinel.py || true
