@@ -154,7 +154,8 @@ def fetch_pr_text(cik, accession):
 
 # ── parse the press release (mirrors the worker) ─────────────────────────────
 def parse_pr(txt):
-    out = {"revenue": None, "eps": None, "eps_basis": "", "guidance": "", "gross_margin": None, "highlights": []}
+    out = {"revenue": None, "eps": None, "eps_basis": "", "guidance": "", "gross_margin": None, "highlights": [],
+           "rev_yoy": None, "gm_dir": 0, "red_flags": [], "green_flags": [], "tone": 0.0}
     if not txt:
         return out
     # revenue (reported, skip guidance sentences)
@@ -169,6 +170,18 @@ def parse_pr(txt):
         v *= 1e9 if m.group(2).lower().startswith("b") else 1e6
         if v > 1e6:
             out["revenue"] = v
+            # YoY growth stated near the revenue figure ("increased 32% year-over-year",
+            # "up 18% from", "a decrease of 7%") — sign-aware.
+            win = txt[m.start(): m.start() + 240]
+            g_up = re.search(r"(?:increas\w+|up|grew|growth|rose)\s+(?:of\s+|by\s+)?([\d.]+)\s*%", win, re.I)
+            g_dn = re.search(r"(?:decreas\w+|down|declin\w+|fell)\s+(?:of\s+|by\s+)?([\d.]+)\s*%", win, re.I)
+            try:
+                if g_up and (not g_dn or g_up.start() < g_dn.start()):
+                    out["rev_yoy"] = float(g_up.group(1))
+                elif g_dn:
+                    out["rev_yoy"] = -float(g_dn.group(1))
+            except ValueError:
+                pass
             break
     # actual reported EPS — prefer NON-GAAP diluted; guard checks the text BEFORE the
     # figure only (a trailing "compared to $X prior year" clause must not disqualify
@@ -188,6 +201,12 @@ def parse_pr(txt):
             di = mm.start() + mm.group(0).rfind("$")
             if _is_guidance(mm.start(), len(mm.group(0))) or _is_prior(di):
                 continue
+            # EPS is a per-share figure — NEVER "billions"/"millions". If the captured
+            # number is immediately followed by more digits (we truncated a bigger number
+            # like $1.243B → "1.24") or by billion/million, it's net income, not EPS.
+            tail = txt[mm.end(1): mm.end(1) + 14]
+            if re.match(r"^\d", tail) or re.match(r"^\s*(?:billion|million|bn\b|mn\b)", tail, re.I):
+                continue
             try:
                 v = float(mm.group(1))
             except ValueError:
@@ -195,6 +214,11 @@ def parse_pr(txt):
             if 0 < v < 1000:
                 cands.append((v, basis))
 
+    # "<basis> net income and (diluted) EPS were $X billion and $Y" → capture $Y (the
+    # per-share number), not $X (net income). This is the form Medtronic/most large-caps use.
+    scan_eps(r"non-?GAAP\s+(?:net\s+(?:income|loss)|earnings)\b[^.]{0,80}?\band\s+(?:non-?GAAP\s+)?(?:diluted\s+)?(?:EPS|earnings per share)[^.]{0,30}?\$\s?[\d.,]+\s*(?:billion|million)\s+and\s+\$\s?(\d+\.\d{1,2})", "non-GAAP")
+    scan_eps(r"(?<!non-)GAAP\s+(?:net\s+(?:income|loss)|earnings)\b[^.]{0,80}?\band\s+(?:diluted\s+)?(?:EPS|earnings per share)[^.]{0,30}?\$\s?[\d.,]+\s*(?:billion|million)\s+and\s+\$\s?(\d+\.\d{1,2})", "GAAP")
+    scan_eps(r"non-?GAAP\s+(?:diluted\s+)?(?:net income per share|earnings per share|EPS)\s+of\s+\$\s?(\d+\.\d{1,2})", "non-GAAP")
     scan_eps(r"non-?GAAP\s+net\s+(?:income|loss)\b[^.]{0,95}?\$\s?(\d+\.\d{2})\s+per\s+(?:diluted\s+)?(?:common\s+)?share", "non-GAAP")
     scan_eps(r"non-?GAAP[^.$%]{0,55}?(?:net income|earnings|EPS)\s+per\s+(?:diluted\s+)?(?:common\s+)?share[^$%\d]{0,18}\$\s?(\d+\.\d{1,2})", "non-GAAP")
     scan_eps(r"(?<!non-)GAAP\s+net\s+(?:income|loss)\b[^.]{0,95}?\$\s?(\d+\.\d{2})\s+per\s+(?:diluted\s+)?(?:common\s+)?share", "GAAP")
@@ -202,10 +226,17 @@ def parse_pr(txt):
     if cands:
         pick = next((c for c in cands if c[1] == "non-GAAP"), None) or cands[0]
         out["eps"], out["eps_basis"] = pick[0], pick[1]
-    # guidance
+    # guidance — must be a genuine FORWARD-looking statement (an actual guidance VERB), not
+    # a results-section heading or dividend line (a bare period name appears in headings too).
     move = re.search(r"\b(rais\w+|lower\w+|reaffirm\w+|reiterat\w+|increas\w+|cut)\b[^.]{0,60}\b(guidance|outlook|forecast)\b", txt, re.I)
-    rng = re.search(r"\b(?:expects?|expected|sees|guidance|outlook|forecasts?|anticipates?|projects?)\b[^.]{0,130}?\$\s?[\d.,]+\s*(?:billion|million|[bm]\b)?(?:\s*(?:to|-|–|—|and)\s*\$?\s?[\d.,]+\s*(?:billion|million|[bm]\b)?)?", txt, re.I)
-    s = rng.group(0) if rng else (move.group(0) if move else "")
+    VERB = r"(?:(?:currently\s+|now\s+)?(?:expects?|sees|anticipates?|projects?|forecasts?|estimates?|guides?|is guiding|reaffirms?|raises?|provides?(?:\s+its)?(?:\s+(?:guidance|outlook))?)|(?:financial\s+)?(?:guidance|outlook))"
+    range_fwd = re.search(VERB + r"[^.]{0,160}?\$\s?[\d.,]+\s*(?:billion|million)?\s*(?:to|–|—|-|and)\s*\$?\s?[\d.,]+\s*(?:billion|million)?", txt, re.I)
+    single = re.search(VERB + r"[^.]{0,130}?(?:non-?GAAP\s+)?(?:diluted\s+)?(?:EPS|earnings per share|revenue|net sales)[^.]{0,40}?\$\s?[\d.,]+\s*(?:billion|million)?", txt, re.I)
+    s = (range_fwd.group(0) if range_fwd else (single.group(0) if single else (move.group(0) if move else "")))
+    if s and re.search(r"\bdividend\b", s, re.I) and not re.search(r"(expects?|guidance|outlook|forecast|anticipat)", s, re.I):
+        s = ""
+    if s and re.search(r"financial results\b", s, re.I) and not re.search(r"(expects?|guidance|outlook|forecast|anticipat)", s, re.I):
+        s = ""
     if s:
         direction = ""
         if move:
@@ -224,6 +255,7 @@ def parse_pr(txt):
             if 0 < cur < 100 and 0 < prev < 100 and abs(cur - prev) < 40:
                 out["gross_margin"] = cur
                 d = "▲ expanding" if cur > prev else "▼ compressing" if cur < prev else "flat"
+                out["gm_dir"] = 1 if cur > prev else -1 if cur < prev else 0
                 out["highlights"].append("\U0001F4CA Gross margin %s%% (%s from %s%%)" % (cur, d, prev))
         except ValueError:
             pass
@@ -247,7 +279,79 @@ def parse_pr(txt):
     grab(r"\b(?:partnership with|partnered with|strategic (?:alliance|collaboration|partnership)|collaboration with|teamed up with)\b[^.]{0,90}", "\U0001F91D")
     grab(r"\b(?:agreed to acquire|completed the acquisition of|has acquired|to acquire)\s+[A-Z][A-Za-z0-9.&'\- ]{2,50}", "\U0001F3F7")
     out["highlights"] = out["highlights"][:3]
+
+    # ── RED FLAGS: the sentences that change a thesis. Each is checked for nearby
+    #    negation ("no impairment", "not aware of") before it counts. ──
+    def _flag(label, pattern):
+        mm = re.search(pattern, txt, re.I)
+        if not mm:
+            return
+        pre = txt[max(0, mm.start() - 18): mm.start()]
+        if re.search(r"\b(?:no|not|without|nor)\s*$", pre, re.I):
+            return
+        out["red_flags"].append(label)
+    _flag("Impairment / write-down", r"\bimpairment(?:s)?\b|\bwrite-?(?:down|off)s?\b|inventory (?:charge|reserve)")
+    _flag("Restatement / material weakness", r"\brestat(?:e|ement|ing)\b|material weakness")
+    _flag("Going concern", r"going concern|substantial doubt")
+    _flag("Key customer loss", r"(?:loss|termination|cancellation) of (?:a |its )?(?:major|significant|key|largest) customer|customer concentration")
+    _flag("Executive departure", r"\b(?:CFO|CEO|Chief (?:Financial|Executive|Operating) Officer)\b[^.]{0,50}\b(?:resign\w*|depart\w*|step(?:ping|s|ped)? down|transition\w*)\b")
+    _flag("Restructuring / layoffs", r"workforce reduction|reduction in force|\blay-?offs?\b|restructuring (?:plan|charges|program)")
+    _flag("Dilution / offering", r"(?:proposed|announced|commenced)[^.]{0,40}(?:public|secondary|equity) offering|convertible (?:senior )?notes offering|at-the-market (?:offering|program)")
+    _flag("Covenant / liquidity stress", r"covenant (?:waiver|breach|violation|relief)|forbearance")
+    _flag("Demand softness", r"(?:weaker|soft(?:er|ening)?|declin\w+|muted) (?:demand|bookings|orders)|pricing pressure|order push-?outs?")
+    _flag("Delayed filing", r"unable to (?:timely )?file|late filing|\bNT 10-")
+    out["red_flags"] = out["red_flags"][:4]
+
+    # ── GREEN FLAGS: durable-positive structure beyond the headline beat ──
+    def _green(label, pattern):
+        if re.search(pattern, txt, re.I):
+            out["green_flags"].append(label)
+    _green("Record revenue", r"\brecord (?:quarterly |annual |fourth.quarter |full.year )?(?:revenue|net sales|sales)\b|all-time high")
+    _green("Backlog / RPO growth", r"\b(?:backlog|remaining performance obligations?|RPO)\b[^.]{0,70}\b(?:grew|increas\w+|up|record|rose)\b")
+    _green("Accelerating growth", r"accelerat\w+ (?:revenue |sales )?growth|growth accelerated")
+    _green("Dividend increase", r"(?:increas\w+|rais\w+)[^.]{0,35}\bdividend\b")
+    _green("Beat own guidance", r"(?:exceed\w+|above|surpass\w+) (?:the )?(?:high|top) end of (?:our|its) (?:guidance|outlook|range)")
+    out["green_flags"] = out["green_flags"][:3]
+
+    # ── MANAGEMENT TONE: crude but honest lexical read of the release language ──
+    pos_w = len(re.findall(r"\b(?:pleased|proud|strong|record|momentum|robust|exceptional|outstanding|exceeded|strength|confident)\b", txt, re.I))
+    neg_w = len(re.findall(r"\b(?:challenging|headwinds?|softness|cautious|difficult|disappointed|uncertainty|pressure|volatile|slowdown)\b", txt, re.I))
+    out["tone"] = max(-1.0, min(1.0, (pos_w - neg_w) / 6.0))
     return out
+
+
+# ── COMPOSITE READING SCORE: one number that weighs everything the release said ──
+#    Base 50. EPS surprise ±30, revenue surprise ±20, guidance direction ±18,
+#    margin direction ±6, red flags −10 each (cap −30), green flags +5 each (cap +15),
+#    tone ±6, YoY growth bonus/penalty. Clamped 0–100, tiered for the alert headline.
+def score_reading(eps_pct, rev_pct, guidance, gm_dir, red_flags, green_flags, tone, rev_yoy):
+    s = 50.0
+    conf = 0
+    if eps_pct is not None:
+        s += max(-15.0, min(15.0, eps_pct)) * 2.0; conf += 1
+    if rev_pct is not None:
+        s += max(-8.0, min(8.0, rev_pct)) * 2.5; conf += 1
+    g = guidance or ""
+    if " raised" in g:
+        s += 14
+    elif " cut" in g:
+        s -= 18
+    elif " reaffirmed" in g:
+        s += 4
+    elif g:
+        s += 2
+    s += 6 * (1 if gm_dir > 0 else -1 if gm_dir < 0 else 0)
+    s -= min(30, 10 * len(red_flags or []))
+    s += min(15, 5 * len(green_flags or []))
+    s += 6.0 * (tone or 0.0)
+    if rev_yoy is not None:
+        s += 6 if rev_yoy >= 40 else 3 if rev_yoy >= 20 else (-8 if rev_yoy < 0 else 0)
+    s = int(round(max(0, min(100, s))))
+    tier = ("\U0001F7E2 STRONG" if s >= 72 else "✅ GOOD" if s >= 58 else
+            "\U0001F7E1 MIXED" if s >= 45 else "❌ WEAK" if s >= 32 else "\U0001F534 BAD")
+    if conf == 0:
+        tier += " (no estimate basis)"
+    return s, tier
 
 
 # ── FMP actuals (EPS / Rev vs estimate) ──────────────────────────────────────
@@ -299,20 +403,32 @@ def finnhub_eps_estimate(sym, ref_date):
 def build_verdict(eps, eps_est, rev, rev_est, eps_basis=""):
     eps_pct = ((eps - eps_est) / abs(eps_est) * 100) if (eps is not None and eps_est) else None
     rev_pct = ((rev - rev_est) / abs(rev_est) * 100) if (rev is not None and rev_est) else None
+    # BASIS GUARD: estimates are non-GAAP. If the actual we parsed is GAAP, "vs est %" is
+    # apples-to-oranges — show the number but suppress the EPS beat/miss verdict.
+    eps_is_gaap = bool(eps_basis and re.search(r"\bGAAP\b", eps_basis) and not re.search(r"non-?GAAP", eps_basis, re.I))
+    eps_mismatch = eps_is_gaap and eps_est is not None
     basis_tag = (" (%s, from release)" % eps_basis) if (eps is not None and eps_basis) else ""
     bits = []
     if eps is not None:
-        bits.append("EPS $%.2f%s%s%s" % (eps, (" vs $%.2f est" % eps_est) if eps_est is not None else "", (" (%+.1f%%)" % eps_pct) if eps_pct is not None else "", basis_tag))
+        est_txt = ((" vs $%.2f est%s" % (eps_est, " (non-GAAP)" if eps_mismatch else "")) if eps_est is not None else "")
+        pct_txt = (" (%+.1f%%)" % eps_pct) if (eps_pct is not None and not eps_mismatch) else ""
+        bits.append("EPS $%.2f%s%s%s" % (eps, est_txt, pct_txt, basis_tag))
     if rev is not None:
         bits.append("Rev %s%s%s" % (fmt_rev(rev), (" vs %s est" % fmt_rev(rev_est)) if rev_est is not None else "", (" (%+.1f%%)" % rev_pct) if rev_pct is not None else ""))
     if not bits:
         return "\U0001F4CB Actuals pending — see the filing.", eps_pct, rev_pct
-    if eps_pct is not None and rev_pct is not None:
-        v = "\U0001F7E2 Strong (double beat)" if eps_pct >= 0 and rev_pct >= 0 else "\U0001F534 Weak (double miss)" if eps_pct < 0 and rev_pct < 0 else "\U0001F7E1 Mixed"
-    elif eps_pct is not None:
-        v = "✅ EPS beat" if eps_pct >= 0 else "❌ EPS miss"
+    e = None if eps_mismatch else eps_pct          # only let EPS drive a verdict when basis lines up
+    def _sgn(x):
+        return 1 if x > 0.5 else -1 if x < -0.5 else 0
+    if e is not None and rev_pct is not None:
+        se, sr = _sgn(e), _sgn(rev_pct)
+        v = "\U0001F7E2 Strong (double beat)" if (se >= 0 and sr >= 0 and se + sr > 0) else "\U0001F534 Weak (double miss)" if (se <= 0 and sr <= 0 and se + sr < 0) else "\U0001F7E1 Mixed"
+    elif e is not None:
+        v = "✅ EPS beat" if _sgn(e) > 0 else "❌ EPS miss" if _sgn(e) < 0 else "⚪ EPS in line"
     elif rev_pct is not None:
-        v = "✅ Rev beat · EPS pending" if rev_pct >= 0 else "❌ Rev miss · EPS pending"
+        v = "✅ Rev beat · EPS basis differs" if _sgn(rev_pct) > 0 else "❌ Rev miss · EPS basis differs" if _sgn(rev_pct) < 0 else "⚪ Rev in line"
+    elif eps_mismatch:
+        v = "\U0001F4CB Reported — GAAP EPS shown (non-GAAP vs est pending)"
     else:
         v = "\U0001F4CB Reported"
     return "%s — %s" % (v, " · ".join(bits)), eps_pct, rev_pct
@@ -437,6 +553,17 @@ def process_ticker(tk, cik, state):
     gross_margin = pr.get("gross_margin")
     ir = ""
     verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est, eps_basis)
+    red_flags = list(pr.get("red_flags") or [])
+    green_flags = list(pr.get("green_flags") or [])
+    tone = pr.get("tone") or 0.0
+    rev_yoy = pr.get("rev_yoy")
+    score, tier = score_reading(eps_pct, rev_pct, guidance, pr.get("gm_dir") or 0, red_flags, green_flags, tone, rev_yoy)
+    verdict = "%s %d/100 \u00b7 %s" % (tier, score, verdict)
+    if rev_yoy is not None:
+        verdict += " \u00b7 YoY %+.0f%%" % rev_yoy
+    # flags lead the highlights — they are the thesis-relevant sentences
+    flag_lines = ["⚠️ " + r for r in red_flags[:3]] + ["\U0001F331 " + gfl for gfl in green_flags[:2]]
+    highlights = (flag_lines + highlights)[:5]
     # Fallback ONLY if the local parse found nothing — then ask the (corrected) worker.
     if eps is None and rev is None:
         wr = fetch_worker_reading(tk) or {}
@@ -472,6 +599,8 @@ def process_ticker(tk, cik, state):
         "rev": rev, "revEst": rev_est,
         "revPct": round(rev_pct, 1) if rev_pct is not None else None,
         "grossMargin": gross_margin, "guidance": guidance, "highlights": highlights,
+        "score": score, "redFlags": red_flags, "greenFlags": green_flags,
+        "tone": round(tone, 2), "revYoY": rev_yoy,
     })
 
     state["seen"][tk] = acc
