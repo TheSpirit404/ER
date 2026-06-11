@@ -604,8 +604,56 @@ def process_ticker(tk, cik, state):
     })
 
     state["seen"][tk] = acc
+    if eps is None and rev is None:
+        state.setdefault("fill", {})[tk] = {"acc": acc, "cik": cik, "date": fdate or "", "ts": time.time()}
     print("[ALERT] %s %s — %s" % (tk, fdate, verdict or "(no actuals yet)"))
     return True
+
+
+_HB = {}
+
+
+def backfill_pass(state):
+    """Readings that went out before actuals were parseable get re-checked for up
+    to 12 hours. When the press release or FMP finally yields the numbers, the
+    structured reading is re-pushed so the desk's Earnings Readings show EPS."""
+    fill = state.get("fill") or {}
+    for tk in list(fill.keys()):
+        info = fill[tk]
+        if time.time() - info.get("ts", 0) > 12 * 3600:
+            del fill[tk]
+            continue
+        try:
+            pr = parse_pr(fetch_pr_text(info["cik"], info["acc"]))
+            fmp = fmp_actuals(tk)
+            eps = pr.get("eps")
+            rev = pr.get("revenue")
+            eps_est, rev_est = fmp.get("eps_est"), fmp.get("rev_est")
+            fn_est = finnhub_eps_estimate(tk, info.get("date"))
+            if fn_est is not None:
+                eps_est = fn_est
+            if eps is None and rev is None:
+                continue
+            verdict, eps_pct, rev_pct = build_verdict(eps, eps_est, rev, rev_est, pr.get("eps_basis") or "")
+            score, tier = score_reading(eps_pct, rev_pct, pr.get("guidance") or "", pr.get("gm_dir") or 0,
+                                        pr.get("red_flags") or [], pr.get("green_flags") or [],
+                                        pr.get("tone") or 0.0, pr.get("rev_yoy"))
+            verdict = "%s %d/100 \u00b7 %s" % (tier, score, verdict)
+            push_ingest({
+                "ticker": tk, "date": info.get("date") or "", "verdict": verdict,
+                "eps": eps, "epsEst": eps_est,
+                "epsPct": round(eps_pct, 1) if eps_pct is not None else None,
+                "rev": rev, "revEst": rev_est,
+                "revPct": round(rev_pct, 1) if rev_pct is not None else None,
+                "grossMargin": pr.get("gross_margin"), "guidance": pr.get("guidance") or "",
+                "highlights": pr.get("highlights") or [],
+                "score": score, "redFlags": pr.get("red_flags") or [], "greenFlags": pr.get("green_flags") or [],
+                "tone": round(pr.get("tone") or 0.0, 2), "revYoY": pr.get("rev_yoy"),
+            })
+            print("[backfill] %s — actuals filled (%s)" % (tk, verdict[:60]))
+            del fill[tk]
+        except Exception as exc:
+            print("[backfill] %s retry failed: %s" % (tk, exc))
 
 
 def run_once():
@@ -626,7 +674,21 @@ def run_once():
         except Exception as exc:
             print("[warn] %s unexpected: %s" % (tk, exc))
         time.sleep(0.3)  # be gentle on SEC (≤10 req/s)
+    try:
+        backfill_pass(state)
+    except Exception as exc:
+        print("[warn] backfill:", exc)
     save_state(state)
+    # heartbeat → worker, so the pipeline health monitor can see the sentinel is alive
+    # (throttled to one ping per ~15 min in loop mode; --once runs ping every run)
+    try:
+        base = worker_base()
+        now = time.time()
+        if base and INGEST_KEY and now - _HB.get("t", 0) > 900:
+            _HB["t"] = now
+            http_post(base + "/health-ping", {"src": "sentinel"}, headers={"X-Ingest-Key": INGEST_KEY})
+    except Exception:
+        pass
     return fired
 
 
